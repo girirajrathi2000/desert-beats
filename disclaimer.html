@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rajasthani Songs Treasury - Folk Music With Meanings</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --rajasthani-red: #D32F2F;
+            --rajasthani-orange: #FF8A65;
+            --rajasthani-yellow: #FFCA28;
+            --rajasthani-blue: #1976D2;
+            --rajasthani-green: #388E3C;
+            --rajasthani-pink: #EC407A;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #333;
+            background-color: #FFF8E1;
+            background-image: 
+                radial-gradient(var(--rajasthani-yellow) 3px, transparent 3px),
+                radial-gradient(var(--rajasthani-orange) 3px, transparent 3px);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            background-attachment: fixed;
+            background-blend-mode: multiply;
+            opacity: 0.97;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange));
+            color: white;
+            border-radius: 0 0 50% 50% / 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/b/bb/Mandana_Painting.JPG');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.15;
+            z-index: -1;
+        }
+        
+        .header h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 600;
+            margin: 40px 0 20px;
+            color: var(--rajasthani-red);
+            position: relative;
+            padding-bottom: 15px;
+        }
+        
+        .section-title::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(to right, var(--rajasthani-orange), var(--rajasthani-yellow));
+            border-radius: 3px;
+        }
+        
+        .intro {
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .intro::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange), var(--rajasthani-yellow), var(--rajasthani-blue), var(--rajasthani-green));
+        }
+        
+        .music-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .music-type {
+            background-color: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            border-left: 5px solid var(--rajasthani-orange);
+        }
+        
+        .music-type:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        }
+        
+        .music-type h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: var(--rajasthani-blue);
+            font-weight: 600;
+        }
+        
+        .songs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .song-card {
+            background-color: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .song-card:hover {
+            transform: translateY(-10px);
+        }
+        
+        .song-header {
+            background: linear-gradient(135deg, var(--rajasthani-blue), var(--rajasthani-red));
+            color: white;
+            padding: 15px 20px;
+            position: relative;
+        }
+        
+        .song-header h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .song-content {
+            padding: 20px;
+        }
+        
+        .song-meaning {
+            background-color: #F9F5EB;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid var(--rajasthani-yellow);
+            font-style: italic;
+        }
+        
+        .song-meaning strong {
+            color: var(--rajasthani-red);
+        }
+        
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+            max-width: 100%;
+            margin-bottom: 15px;
+            border-radius: 10px;
+        }
+        
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+        }
+        
+        .footer {
+            background-color: #333;
+            color: white;
+            padding: 30px 0;
+            text-align: center;
+            margin-top: 50px;
+            border-radius: 15px 15px 0 0;
+            position: relative;
+        }
+        
+        .footer::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange), var(--rajasthani-yellow), var(--rajasthani-blue), var(--rajasthani-green));
+        }
+        
+        .mandana-pattern {
+            position: absolute;
+            opacity: 0.1;
+            z-index: -1;
+        }
+        
+        .mandana-top-right {
+            top: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+        }
+        
+        .mandana-bottom-left {
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+        }
+        
+        .decorative-border {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        
+        .decorative-border div {
+            height: 5px;
+            width: 50px;
+            margin: 0 5px;
+        }
+        
+        .dec-red {
+            background-color: var(--rajasthani-red);
+            border-radius: 5px;
+        }
+        
+        .dec-orange {
+            background-color: var(--rajasthani-orange);
+            border-radius: 5px;
+        }
+        
+        .dec-yellow {
+            background-color: var(--rajasthani-yellow);
+            border-radius: 5px;
+        }
+        
+        .dec-blue {
+            background-color: var(--rajasthani-blue);
+            border-radius: 5px;
+        }
+        
+        .dec-green {
+            background-color: var(--rajasthani-green);
+            border-radius: 5px;
+        }
+        
+        /* Rajasthani design elements */
+        .rajasthani-symbol {
+            display: inline-block;
+            margin: 0 10px;
+            font-size: 1.5rem;
+            color: var(--rajasthani-orange);
+        }
+        
+        .cultural-note {
+            background-color: #FFF3E0;
+            border-left: 4px solid var(--rajasthani-blue);
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .cultural-note h4 {
+            color: var(--rajasthani-blue);
+            margin-top: 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+<nav class="text-center p-4 bg-white shadow">
+<a href="index.html" class="px-3 text-blue-700 font-semibold">Home</a>
+<a href="about.html" class="px-3 text-blue-700 font-semibold">About</a>
+<a href="contact.html" class="px-3 text-blue-700 font-semibold">Contact</a>
+<a href="privacy.html" class="px-3 text-blue-700 font-semibold">Privacy</a>
+<a href="disclaimer.html" class="px-3 text-blue-700 font-semibold">Disclaimer</a>
+</nav>
+
+    <header class="header">
+        <div class="container">
+            <h1>Disclaimer</h1>
+            <p>Disclaimer</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="intro">
+            <h2 class="section-title">Disclaimer</h2>
+            
+<p>This website does not host or own any video content. All videos are embedded from YouTube using public sharing options, and remain the property of their original creators.</p>
+<p>We are a fan-driven effort to preserve and promote Rajasthani folk culture, and we make every effort to respect the copyrights of the original artists and publishers.</p>
+
+        </section>
+    </div>
+    </body>
+</html>

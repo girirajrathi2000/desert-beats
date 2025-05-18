@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rajasthani Songs Treasury - Folk Music With Meanings</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --rajasthani-red: #D32F2F;
+            --rajasthani-orange: #FF8A65;
+            --rajasthani-yellow: #FFCA28;
+            --rajasthani-blue: #1976D2;
+            --rajasthani-green: #388E3C;
+            --rajasthani-pink: #EC407A;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #333;
+            background-color: #FFF8E1;
+            background-image: 
+                radial-gradient(var(--rajasthani-yellow) 3px, transparent 3px),
+                radial-gradient(var(--rajasthani-orange) 3px, transparent 3px);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            background-attachment: fixed;
+            background-blend-mode: multiply;
+            opacity: 0.97;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange));
+            color: white;
+            border-radius: 0 0 50% 50% / 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .header::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://upload.wikimedia.org/wikipedia/commons/b/bb/Mandana_Painting.JPG');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.15;
+            z-index: -1;
+        }
+        
+        .header h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 600;
+            margin: 40px 0 20px;
+            color: var(--rajasthani-red);
+            position: relative;
+            padding-bottom: 15px;
+        }
+        
+        .section-title::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(to right, var(--rajasthani-orange), var(--rajasthani-yellow));
+            border-radius: 3px;
+        }
+        
+        .intro {
+            background-color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .intro::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange), var(--rajasthani-yellow), var(--rajasthani-blue), var(--rajasthani-green));
+        }
+        
+        .music-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .music-type {
+            background-color: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            border-left: 5px solid var(--rajasthani-orange);
+        }
+        
+        .music-type:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        }
+        
+        .music-type h3 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: var(--rajasthani-blue);
+            font-weight: 600;
+        }
+        
+        .songs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .song-card {
+            background-color: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        
+        .song-card:hover {
+            transform: translateY(-10px);
+        }
+        
+        .song-header {
+            background: linear-gradient(135deg, var(--rajasthani-blue), var(--rajasthani-red));
+            color: white;
+            padding: 15px 20px;
+            position: relative;
+        }
+        
+        .song-header h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .song-content {
+            padding: 20px;
+        }
+        
+        .song-meaning {
+            background-color: #F9F5EB;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid var(--rajasthani-yellow);
+            font-style: italic;
+        }
+        
+        .song-meaning strong {
+            color: var(--rajasthani-red);
+        }
+        
+        .video-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+            max-width: 100%;
+            margin-bottom: 15px;
+            border-radius: 10px;
+        }
+        
+        .video-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+        }
+        
+        .footer {
+            background-color: #333;
+            color: white;
+            padding: 30px 0;
+            text-align: center;
+            margin-top: 50px;
+            border-radius: 15px 15px 0 0;
+            position: relative;
+        }
+        
+        .footer::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange), var(--rajasthani-yellow), var(--rajasthani-blue), var(--rajasthani-green));
+        }
+        
+        .mandana-pattern {
+            position: absolute;
+            opacity: 0.1;
+            z-index: -1;
+        }
+        
+        .mandana-top-right {
+            top: 20px;
+            right: 20px;
+            width: 150px;
+            height: 150px;
+        }
+        
+        .mandana-bottom-left {
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+        }
+        
+        .decorative-border {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+        }
+        
+        .decorative-border div {
+            height: 5px;
+            width: 50px;
+            margin: 0 5px;
+        }
+        
+        .dec-red {
+            background-color: var(--rajasthani-red);
+            border-radius: 5px;
+        }
+        
+        .dec-orange {
+            background-color: var(--rajasthani-orange);
+            border-radius: 5px;
+        }
+        
+        .dec-yellow {
+            background-color: var(--rajasthani-yellow);
+            border-radius: 5px;
+        }
+        
+        .dec-blue {
+            background-color: var(--rajasthani-blue);
+            border-radius: 5px;
+        }
+        
+        .dec-green {
+            background-color: var(--rajasthani-green);
+            border-radius: 5px;
+        }
+        
+        /* Rajasthani design elements */
+        .rajasthani-symbol {
+            display: inline-block;
+            margin: 0 10px;
+            font-size: 1.5rem;
+            color: var(--rajasthani-orange);
+        }
+        
+        .cultural-note {
+            background-color: #FFF3E0;
+            border-left: 4px solid var(--rajasthani-blue);
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .cultural-note h4 {
+            color: var(--rajasthani-blue);
+            margin-top: 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+<nav style="text-align:center; padding:10px;">
+  <a href="index.html">Home</a> |
+  <a href="about.html">About</a> |
+  <a href="contact.html">Contact</a> |
+  <a href="privacy.html">Privacy Policy</a> |
+  <a href="disclaimer.html">Disclaimer</a>
+</nav>
+
+    <header class="header">
+        <img src="https://indianfolkart.org/wp-content/uploads/2022/03/Mandana-Art-Priyam-Jain-01.jpeg" class="mandana-pattern mandana-top-right" alt="Mandana Pattern">
+        <div class="container">
+            <h1>Rajasthani Songs Treasury</h1>
+            <p>A collection of traditional folk music with meanings and cultural context</p>
+        </div>
+    </header>
+    
+    <div class="container">
+        <section class="intro">
+            <h2 class="section-title">Experience the Magic of Rajasthani Folk Music</h2>
+            <p>Rajasthani folk music is a vibrant expression of the rich cultural heritage of India's largest state. The songs, often passed down through generations, embody love, valor, devotion, and festivity, reflecting the everyday experiences of the Rajasthani people. Each melody tells a story, each rhythm captures the spirit of the desert state.</p>
+            <p>This collection aims to preserve and celebrate the diverse musical traditions of Rajasthan by featuring 1000 carefully selected folk songs with their meanings and cultural context. Immerse yourself in the soul-stirring melodies that have enchanted listeners for centuries.</p>
+            <div class="cultural-note">
+                <h4>Cultural Significance</h4>
+                <p>Rajasthani folk music is deeply rooted within the everyday experiences of the people. It embodies love, valor, devotion, and festivity, with songs sung mostly among groups of people celebrating, lamenting, or during idle times. The music often celebrates and personifies nature, reflecting the deep connection that the people have with their natural surroundings.</p>
+            </div>
+        </section>
+        
+        <div class="decorative-border">
+            <div class="dec-red"></div>
+            <div class="dec-orange"></div>
+            <div class="dec-yellow"></div>
+            <div class="dec-blue"></div>
+            <div class="dec-green"></div>
+        </div>
+        
+        <h2 class="section-title">Types of Rajasthani Folk Music</h2>
+        <div class="music-types">
+            <div class="music-type">
+                <h3>Mand</h3>
+                <p>One of the most popular music styles in Rajasthan, Mand is known for its classical touch of different ragas. It was originally developed in royal palaces to honor Rajput monarchs but has evolved significantly and is now performed more widely.</p>
+            </div>
+            <div class="music-type">
+                <h3>Panihari</h3>
+                <p>These traditional songs celebrate water – a precious resource in the arid Rajasthan. The term 'Panihari' refers to women who fetch water, and these songs lyrically describe chores centered around water and wells, reflecting the importance of rainfall and water sources.</p>
+            </div>
+            <div class="music-type">
+                <h3>Ghoomar</h3>
+                <p>Originally developed by the Bhil tribe to worship Goddess Saraswati, Ghoomar is both a traditional folk dance and music form. The term comes from 'ghoomna' (turning around), and symbolizes womanhood, innocence, and the grace of Rajput women.</p>
+            </div>
+            <div class="music-type">
+                <h3>Pabuji Ki Phad</h3>
+                <p>A folk traditional style dedicated to the memory of the folk hero Pabuji from the 14th century. It combines storytelling with musical accompaniment, often performed with a painted scroll depicting the heroic deeds of Pabuji.</p>
+            </div>
+        </div>
+        
+        <div class="decorative-border">
+            <div class="dec-red"></div>
+            <div class="dec-orange"></div>
+            <div class="dec-yellow"></div>
+            <div class="dec-blue"></div>
+            <div class="dec-green"></div>
+        </div>
+        
+        <h2 class="section-title">Featured Rajasthani Folk Songs</h2>
+        
+        <div class="songs-grid">
+            <div class="song-card">
+                <div class="song-header">
+                    <h3>Kesariya Balam</h3>
+                    <p>A Traditional Welcome Song</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/IEQ9Vj8lPa4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> "Kesariya Balam" is a folk song about welcoming Rajput Warriors on their return home after fighting wars away from their wives. "Kesariya" means saffron, which symbolically represents good health and beauty, while "Balam" refers to a husband or lover. The song is an invitation to the beloved to visit the singer's homeland.
+                    </div>
+                    <p>This song is sung in the Mand singing style and is one of the most popular Rajasthani folk narrations. It represents the warmth and hospitality that Rajasthan is known for. The song gained widespread popularity beyond Rajasthan and has become emblematic of Indian hospitality.</p>
+                </div>
+            </div>
+            
+            <div class="song-card">
+                <div class="song-header">
+                    <h3>Kalyo Kud Padyo Mela Mein</h3>
+                    <p>A Playful Folk Narrative</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/LQbqW0CIAsc" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> The song tells a story about a boy named Kalyo who jumps into the fracas of a fair. The lyrics revolve around female characters playfully teasing a newly married girl, humorously suggesting that she hide as her groom has arrived at the fair.
+                    </div>
+                    <p>This vibrant and energetic song captures the festive spirit of Rajasthani fairs and celebrations. It's often performed during cultural events and is popular for its catchy rhythm and playful lyrics that vividly depict social dynamics and celebrations.</p>
+                </div>
+            </div>
+            
+            <div class="song-card">
+                <div class="song-header">
+                    <h3>Moomal</h3>
+                    <p>A Timeless Love Story</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/1X3Vm-ndONc" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> This song narrates the immortal love story between Moomal, the beautiful Princess of Jaisalmer, and Mahendra (Rana), the Prince of Umarkot. The lyrics beautifully describe "nakh shish varnan" — a head-to-toe portrayal of Moomal's beauty, comparing her features to elements in nature.
+                    </div>
+                    <p>In this poetic folk narrative, the Prince of Umarkot invites Moomal to join him in his land with the recurring line: "Senari ye Mumal hale to le chalu mur dar desh" (O my beautiful Moomal, if you come with me, I will take you to my desert land). The song represents one of Rajasthan's most beloved folk tales of love and longing.</p>
+                </div>
+            </div>
+            
+            <div class="song-card">
+                <div class="song-header">
+                    <h3>Banna Re Bagan Main Jhula Ghalya</h3>
+                    <p>Traditional Folk Melody</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/ifCN_rv5MCo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> This traditional folk song describes a swing placed in a garden, with "Banna" referring to a Rajput man or groom out of respect. The song is associated with celebrations and festive occasions in Rajasthani culture.
+                    </div>
+                    <p>Often performed during weddings and festivals, this song celebrates the joy and playfulness of life's special moments. The swing (jhula) represents both literal enjoyment and metaphorical emotions swinging between happiness and anticipation in cultural celebrations.</p>
+                </div>
+            </div>
+            
+            <div class="song-card">
+                <div class="song-header">
+                    <h3>Naina Ra Lobhi</h3>
+                    <p>An Enchanting Ghoomar Song</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/5HBSE24WZZg" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> "Naina Ra Lobhi" translates to "The Greedy Eyes" or "Longing Eyes." The song expresses the feeling of being captivated by someone's gaze and the emotions that arise from that visual connection.
+                    </div>
+                    <p>This popular Ghoomar song celebrates the beauty of eyes and the emotions they convey. It's one of the most beloved compositions in Rajasthani folk tradition, combining the rhythmic Ghoomar dance form with expressive lyrics that resonate with themes of love and attraction.</p>
+                </div>
+            </div>
+            
+            <div class="song-card">
+                <div class="song-header">
+                    <h3>Panihari</h3>
+                    <p>Water Bearer's Song</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/2O22sUpfBG0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> Panihari songs highlight the importance of rainfall, water, and wells in the dry state of Rajasthan. The term 'Panihari' refers to women who fetch water, and these songs often describe a lady speaking to water-bearers about dense black clouds in the sky.
+                    </div>
+                    <p>These songs reflect the challenges of finding water in arid regions and celebrate this precious resource. They showcase the emotional and physical journey of women who travel long distances to collect water, expressing both their struggles and their resilience through poetic lyrics.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="decorative-border">
+            <div class="dec-red"></div>
+            <div class="dec-orange"></div>
+            <div class="dec-yellow"></div>
+            <div class="dec-blue"></div>
+            <div class="dec-green"></div>
+        </div>
+        
+        <section class="intro">
+            <h2 class="section-title">Folk Music Instruments of Rajasthan</h2>
+            <p>The rich musical heritage of Rajasthan is complemented by a diverse array of traditional instruments that create its distinctive sound. From string instruments to percussion and wind instruments, these traditional tools of music-making have been passed down through generations of skilled musicians.</p>
+            
+            <div class="music-types">
+                <div class="music-type">
+                    <h3>Ravanhatha</h3>
+                    <p>A bowed string instrument believed to be the ancestor of the violin family. Legend associates it with King Ravana from the Hindu epic Ramayana. It consists of a coconut shell covered with goat hide and bamboo neck with horse hair strings.</p>
+                </div>
+                <div class="music-type">
+                    <h3>Kamaicha</h3>
+                    <p>A seventeen-stringed instrument played with a bow, primarily by the Manganiar community. It has a big, round, hollow wooden sound box with a goatskin membrane stretched over it.</p>
+                </div>
+                <div class="music-type">
+                    <h3>Morchang</h3>
+                    <p>A small metal instrument similar to a jew's harp, widely used in Rajasthani folk music. When plucked, it produces a distinctive twanging sound that adds rhythm and texture to the music.</p>
+                </div>
+                <div class="music-type">
+                    <h3>Sindhi Sarangi</h3>
+                    <p>A bowed string instrument with three to four main strings and up to 35 sympathetic strings. It's capable of mimicking the human voice and is a principal instrument in Rajasthani folk ensemble.</p>
+                </div>
+            </div>
+        </section>
+        
+        <div class="decorative-border">
+            <div class="dec-red"></div>
+            <div class="dec-orange"></div>
+            <div class="dec-yellow"></div>
+            <div class="dec-blue"></div>
+            <div class="dec-green"></div>
+        </div>
+        
+        <section class="intro">
+            <h2 class="section-title">Exploring More Songs</h2>
+            <p>This collection is just the beginning of our journey through the rich musical traditions of Rajasthan. Our complete archive features 1000 songs spanning various genres, themes, and cultural contexts. Explore songs of heroism, love, spirituality, seasons, and everyday life.</p>
+            <p>Each entry in our collection includes:</p>
+            <ul class="list-disc pl-8 my-4">
+                <li>Original YouTube performance by authentic artists</li>
+                <li>English translation and meaning explanation</li>
+                <li>Cultural and historical context</li>
+                <li>Information about the musical style and instruments</li>
+            </ul>
+            <p>Return often as we continue to add more fascinating songs and deepen your understanding of Rajasthan's musical heritage.</p>
+        </section>
+    </div>
+    
+    <footer class="footer">
+        <div class="container">
+            <img src="https://i.pinimg.com/474x/f5/8e/48/f58e48e07faaa161dee2ead7fc8d48df.jpg" class="mandana-pattern mandana-bottom-left" alt="Mandana Pattern">
+            <p>Rajasthani Songs Treasury © 2025</p>
+            <p>A collection of folk songs shared with YouTube links to respect copyright</p>
+            <p>This project aims to preserve and celebrate the rich musical heritage of Rajasthan</p>
+            <div class="mt-4">
+                <span class="rajasthani-symbol">❁</span>
+                <span class="rajasthani-symbol">☸</span>
+                <span class="rajasthani-symbol">❁</span>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
