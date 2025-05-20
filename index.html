@@ -313,17 +313,376 @@
             font-weight: 600;
             font-size: 1.1rem;
         }
+
+        /* Search Feature Styles */
+        .search-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto 30px;
+            background: white;
+            border-radius: 50px;
+            padding: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            display: flex;
+            overflow: hidden;
+            border: 2px solid var(--rajasthani-orange);
+        }
+
+        .search-container input {
+            flex: 1;
+            padding: 10px 20px;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            border-radius: 50px 0 0 50px;
+        }
+
+        .search-container button {
+            background: linear-gradient(to right, var(--rajasthani-orange), var(--rajasthani-red));
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: 600;
+            border-radius: 0 50px 50px 0;
+            transition: all 0.3s ease;
+        }
+
+        .search-container button:hover {
+            background: linear-gradient(to right, var(--rajasthani-red), var(--rajasthani-orange));
+        }
+
+        .search-results {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+            background: white;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 800px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .search-results.active {
+            max-height: 500px;
+            margin-bottom: 30px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .result-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .result-item h4 {
+            color: var(--rajasthani-blue);
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .result-item p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Category Filter Styles */
+        .category-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .category-filter {
+            padding: 8px 16px;
+            background-color: white;
+            border: 1px solid var(--rajasthani-orange);
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--rajasthani-orange);
+            font-weight: 500;
+        }
+
+        .category-filter:hover,
+        .category-filter.active {
+            background-color: var(--rajasthani-orange);
+            color: white;
+        }
+
+        /* Scroll to top button */
+        .scroll-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--rajasthani-red);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 100;
+        }
+
+        .scroll-top.visible {
+            opacity: 1;
+        }
+
+        .scroll-top i {
+            font-size: 20px;
+        }
+
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2.5rem;
+            }
+            
+            .songs-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .music-types {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-container {
+                flex-direction: column;
+                border-radius: 15px;
+            }
+            
+            .search-container input {
+                border-radius: 15px;
+                margin-bottom: 10px;
+            }
+            
+            .search-container button {
+                border-radius: 15px;
+                width: 100%;
+            }
+        }
+
+        /* Accordion styles for categories */
+        .accordion {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .accordion-header {
+            padding: 15px 20px;
+            background: linear-gradient(135deg, var(--rajasthani-blue), var(--rajasthani-red));
+            color: white;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .accordion-header h3 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .accordion-content.active {
+            max-height: 1000px;
+            padding: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            border-bottom: 2px solid var(--rajasthani-orange);
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f5f5f5;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            margin-right: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background-color: var(--rajasthani-orange);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .highlight {
+            background-color: yellow;
+            font-weight: bold;
+        }
+
+        /* Historical timeline */
+        .timeline {
+            position: relative;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+
+        .timeline::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            background-color: var(--rajasthani-red);
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -3px;
+            border-radius: 5px;
+        }
+
+        .timeline-item {
+            padding: 10px 40px;
+            position: relative;
+            width: 50%;
+            box-sizing: border-box;
+        }
+
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            right: -12px;
+            background-color: white;
+            border: 4px solid var(--rajasthani-yellow);
+            top: 15px;
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .timeline-left {
+            left: 0;
+        }
+
+        .timeline-right {
+            left: 50%;
+        }
+
+        .timeline-right::after {
+            left: -12px;
+        }
+
+        .timeline-content {
+            padding: 20px;
+            background-color: white;
+            position: relative;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .timeline-content h4 {
+            color: var(--rajasthani-blue);
+            margin-top: 0;
+        }
+
+        @media screen and (max-width: 768px) {
+            .timeline::after {
+                left: 31px;
+            }
+
+            .timeline-item {
+                width: 100%;
+                padding-left: 70px;
+                padding-right: 25px;
+            }
+
+            .timeline-item::after {
+                left: 19px;
+            }
+
+            .timeline-right {
+                left: 0%;
+            }
+        }
+        
+        /* Map styling */
+        .map-container {
+            height: 400px;
+            width: 100%;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* Tag cloud */
+        .tag-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+
+        .tag {
+            padding: 5px 15px;
+            background-color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .tag:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+
+        .tag-1 { color: var(--rajasthani-red); border: 1px solid var(--rajasthani-red); }
+        .tag-2 { color: var(--rajasthani-blue); border: 1px solid var(--rajasthani-blue); }
+        .tag-3 { color: var(--rajasthani-green); border: 1px solid var(--rajasthani-green); }
+        .tag-4 { color: var(--rajasthani-orange); border: 1px solid var(--rajasthani-orange); }
+        .tag-5 { color: var(--rajasthani-pink); border: 1px solid var(--rajasthani-pink); }
     </style>
 </head>
 <body>
-<nav style="text-align:center; padding:10px;">
-  <a href="index.html">Home</a> |
-  <a href="about.html">About</a> |
-  <a href="contact.html">Contact</a> |
-  <a href="privacy.html">Privacy Policy</a> |
-  <a href="disclaimer.html">Disclaimer</a>
-</nav>
 
+    <nav style="text-align:center; padding:10px;">
+    <a href="index.html">Home</a> |
+    <a href="about.html">About</a> |
+    <a href="contact.html">Contact</a> |
+    <a href="privacy.html">Privacy Policy</a> |
+    <a href="disclaimer.html">Disclaimer</a>
+    </nav>
+    
     <header class="header">
         <img src="https://indianfolkart.org/wp-content/uploads/2022/03/Mandana-Art-Priyam-Jain-01.jpeg" class="mandana-pattern mandana-top-right" alt="Mandana Pattern">
         <div class="container">
@@ -333,13 +692,107 @@
     </header>
     
     <div class="container">
+        <!-- Search Feature -->
+        <div class="search-container">
+            <input type="text" id="song-search" placeholder="Search songs by title, artist, or lyrics..." />
+            <button id="search-button"><i class="fas fa-search"></i> Search</button>
+        </div>
+        
+        <div id="search-results" class="search-results">
+            <!-- Search results will appear here -->
+        </div>
+        
+        <!-- Category Filters -->
+        <div class="category-filters">
+            <div class="category-filter active" data-category="all">All Categories</div>
+            <div class="category-filter" data-category="love">Love Songs</div>
+            <div class="category-filter" data-category="ghoomar">Ghoomar</div>
+            <div class="category-filter" data-category="panihari">Panihari</div>
+            <div class="category-filter" data-category="festive">Festive</div>
+            <div class="category-filter" data-category="heroic">Heroic</div>
+        </div>
+        
         <section class="intro">
             <h2 class="section-title">Experience the Magic of Rajasthani Folk Music</h2>
             <p>Rajasthani folk music is a vibrant expression of the rich cultural heritage of India's largest state. The songs, often passed down through generations, embody love, valor, devotion, and festivity, reflecting the everyday experiences of the Rajasthani people. Each melody tells a story, each rhythm captures the spirit of the desert state.</p>
             <p>This collection aims to preserve and celebrate the diverse musical traditions of Rajasthan by featuring 1000 carefully selected folk songs with their meanings and cultural context. Immerse yourself in the soul-stirring melodies that have enchanted listeners for centuries.</p>
+            
+            <div class="tag-cloud">
+                <span class="tag tag-1">Love Ballads</span>
+                <span class="tag tag-2">Wedding Songs</span>
+                <span class="tag tag-3">Desert Music</span>
+                <span class="tag tag-4">Royal Court Songs</span>
+                <span class="tag tag-5">Seasonal Music</span>
+                <span class="tag tag-1">Devotional</span>
+                <span class="tag tag-2">Folk Dance Music</span>
+                <span class="tag tag-3">Historical Songs</span>
+                <span class="tag tag-4">Cultural Heritage</span>
+                <span class="tag tag-5">Traditional Instruments</span>
+                <span class="tag tag-1">Festivals</span>
+                <span class="tag tag-2">Folklore</span>
+            </div>
+            
             <div class="cultural-note">
                 <h4>Cultural Significance</h4>
                 <p>Rajasthani folk music is deeply rooted within the everyday experiences of the people. It embodies love, valor, devotion, and festivity, with songs sung mostly among groups of people celebrating, lamenting, or during idle times. The music often celebrates and personifies nature, reflecting the deep connection that the people have with their natural surroundings.</p>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active" data-tab="overview">Overview</div>
+                <div class="tab" data-tab="history">Historical Context</div>
+                <div class="tab" data-tab="communities">Musical Communities</div>
+            </div>
+            
+            <div id="overview" class="tab-content active">
+                <p>Rajasthan's folk music is as vast and colorful as its landscape. From the melodic tunes of the Manganiyars to the spiritual renditions of the Langas, the musical traditions of this region reveal centuries of cultural exchange and artistic evolution. These folk songs provide insights into Rajasthan's history, daily life, spiritual beliefs, and social customs.</p>
+                <p>The music serves multiple purposes: it entertains during celebrations, preserves historical narratives, invokes divine blessings, marks seasonal changes, and accompanies life's significant milestones from birth to marriage to death. Each region of Rajasthan has its distinctive musical style, influenced by local dialects, available instruments, and unique cultural practices.</p>
+            </div>
+            
+            <div id="history" class="tab-content">
+                <p>The musical traditions of Rajasthan have evolved over centuries, influenced by royal patronage, trade routes, invasions, and migrations. Many of the folk songs we hear today have origins dating back several centuries, with some musical forms developing during the Rajput era when royal courts would patronize musicians.</p>
+                
+                <div class="timeline">
+                    <div class="timeline-item timeline-left">
+                        <div class="timeline-content">
+                            <h4>8th-12th Century</h4>
+                            <p>Early development of folk traditions with influences from nearby regions. Desert communities begin developing distinctive musical expressions.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item timeline-right">
+                        <div class="timeline-content">
+                            <h4>12th-16th Century</h4>
+                            <p>Royal patronage leads to refinement of musical styles. The Mand style emerges in royal courts while nomadic musicians develop their own traditions.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item timeline-left">
+                        <div class="timeline-content">
+                            <h4>16th-19th Century</h4>
+                            <p>Musical communities like the Manganiyars and Langas establish distinctive styles. Instruments like Ravanhatha and Kamaicha achieve their modern form.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item timeline-right">
+                        <div class="timeline-content">
+                            <h4>20th Century</h4>
+                            <p>Folk music begins to be documented and recorded. Traditional artists start performing on national and international stages.</p>
+                        </div>
+                    </div>
+                    <div class="timeline-item timeline-left">
+                        <div class="timeline-content">
+                            <h4>Present Day</h4>
+                            <p>Revival of interest in folk traditions. Fusion with contemporary music and global collaborations introduce Rajasthani folk music to wider audiences.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="communities" class="tab-content">
+                <p>Several communities in Rajasthan are known for their distinctive musical traditions:</p>
+                <ul class="list-disc pl-8 my-4">
+                    <li><strong>Manganiyars:</strong> Muslim musicians traditionally patronized by wealthy Rajputs. They perform on occasions like births, marriages and during festivals. Their repertoire includes ballads about local rulers, love songs, and devotional music.</li>
+                    <li><strong>Langas:</strong> Another Muslim community of musicians known for their expertise in singing and playing various instruments. Their music often focuses on Sufi themes and love ballads.</li>
+                    <li><strong>Bhopas:</strong> Priest-singers who perform epics like Pabuji ki Phad, using a painted scroll as a visual aid while singing the narrative with dramatic storytelling.</li>
+                    <li><strong>Kalbelias:</strong> Known for their snake charmer dance, their music features the pungi (been) instrument and distinctive vocals that accompany the famous Kalbelia dance.</li>
+                </ul>
             </div>
         </section>
         
@@ -371,6 +824,33 @@
             </div>
         </div>
         
+        <div class="accordion">
+            <div class="accordion-header">
+                <h3>More Music Styles of Rajasthan</h3>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="accordion-content">
+                <div class="music-types">
+                    <div class="music-type">
+                        <h3>Maand</h3>
+                        <p>Regarded as the most sophisticated form of Rajasthani folk music, Maand originated in the courts of Rajput kings. It's characterized by its melodic structure similar to classical ragas and often depicts themes of love, heroism, and separation.</p>
+                    </div>
+                    <div class="music-type">
+                        <h3>Kalbeliya</h3>
+                        <p>Associated with the nomadic snake charmer community, this vibrant musical style accompanies the famous Kalbelia dance. It features unique percussion, a distinctive vocal style, and the haunting sound of the been (pungi) instrument.</p>
+                    </div>
+                    <div class="music-type">
+                        <h3>Bhopa Bhopi</h3>
+                        <p>This narrative musical form is performed by the priest-singers called Bhopas and their wives (Bhopis). They sing epic tales in front of a phad (painted scroll), combining storytelling, music, and visual elements to narrate heroic legends.</p>
+                    </div>
+                    <div class="music-type">
+                        <h3>Bhajans and Kirtans</h3>
+                        <p>These devotional songs are central to Rajasthan's spiritual traditions. They praise deities, narrate mythological stories, and express devotional sentiments, often performed during religious festivals and gatherings.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="decorative-border">
             <div class="dec-red"></div>
             <div class="dec-orange"></div>
@@ -381,8 +861,8 @@
         
         <h2 class="section-title">Featured Rajasthani Folk Songs</h2>
         
-        <div class="songs-grid">
-            <div class="song-card">
+        <div class="songs-grid" id="songs-container">
+            <div class="song-card" data-category="love">
                 <div class="song-header">
                     <h3>Kesariya Balam</h3>
                     <p>A Traditional Welcome Song</p>
@@ -398,7 +878,7 @@
                 </div>
             </div>
             
-            <div class="song-card">
+            <div class="song-card" data-category="festive">
                 <div class="song-header">
                     <h3>Kalyo Kud Padyo Mela Mein</h3>
                     <p>A Playful Folk Narrative</p>
@@ -414,7 +894,7 @@
                 </div>
             </div>
             
-            <div class="song-card">
+            <div class="song-card" data-category="love">
                 <div class="song-header">
                     <h3>Moomal</h3>
                     <p>A Timeless Love Story</p>
@@ -430,7 +910,7 @@
                 </div>
             </div>
             
-            <div class="song-card">
+            <div class="song-card" data-category="festive">
                 <div class="song-header">
                     <h3>Banna Re Bagan Main Jhula Ghalya</h3>
                     <p>Traditional Folk Melody</p>
@@ -446,7 +926,7 @@
                 </div>
             </div>
             
-            <div class="song-card">
+            <div class="song-card" data-category="ghoomar">
                 <div class="song-header">
                     <h3>Naina Ra Lobhi</h3>
                     <p>An Enchanting Ghoomar Song</p>
@@ -462,7 +942,7 @@
                 </div>
             </div>
             
-            <div class="song-card">
+            <div class="song-card" data-category="panihari">
                 <div class="song-header">
                     <h3>Panihari</h3>
                     <p>Water Bearer's Song</p>
@@ -475,6 +955,103 @@
                         <strong>Meaning:</strong> Panihari songs highlight the importance of rainfall, water, and wells in the dry state of Rajasthan. The term 'Panihari' refers to women who fetch water, and these songs often describe a lady speaking to water-bearers about dense black clouds in the sky.
                     </div>
                     <p>These songs reflect the challenges of finding water in arid regions and celebrate this precious resource. They showcase the emotional and physical journey of women who travel long distances to collect water, expressing both their struggles and their resilience through poetic lyrics.</p>
+                </div>
+            </div>
+            
+            <!-- Additional Songs -->
+            <div class="song-card" data-category="love">
+                <div class="song-header">
+                    <h3>Chaudhary</h3>
+                    <p>A Modern Folk Classic</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/1gukvtH_a3I" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> "Chaudhary" tells the story of a man's undying love towards a young girl. Unlike most love songs about young lovers, this song portrays the depth of emotion from a more mature perspective, creating a unique narrative of deep devotion and commitment.
+                    </div>
+                    <p>This song gained widespread popularity after being featured in Coke Studio India, introducing modern audiences to the richness of Rajasthani folk music. Its haunting melody and poignant lyrics have made it one of the most recognized Rajasthani songs across the country and beyond.</p>
+                </div>
+            </div>
+            
+            <div class="song-card" data-category="heroic">
+                <div class="song-header">
+                    <h3>Margia Bohara</h3>
+                    <p>A Heroic Ballad</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/xXfAVXNo7fo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> This traditional folk ballad narrates a tale of bravery and sacrifice. The song recounts the heroic deed of Bohara and serves as a remembrance of valor in Rajasthani culture.
+                    </div>
+                    <p>Heroic ballads like "Margia Bohara" are an essential part of Rajasthani musical tradition, preserving stories of brave men and women who displayed extraordinary courage and sacrifice. These songs ensure that historical acts of heroism continue to inspire future generations.</p>
+                </div>
+            </div>
+            
+            <div class="song-card" data-category="ghoomar">
+                <div class="song-header">
+                    <h3>Leta Jaijo Re</h3>
+                    <p>A Modern Take on Traditional Music</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/wHpnQ3K981U" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> "Leta Jaijo Re" speaks of the legacy of Rajasthani culture, echoing history from palatial havelis and speaking of furtive and shy romances through stone windows. The song captures the essence of traditional courtship in Rajasthan's royal past.
+                    </div>
+                    <p>This modern adaptation by Coke Studio Bharat beautifully preserves the authentic essence of traditional Rajasthani folk music while presenting it in a contemporary format. The collaboration between established artists brings fresh energy to age-old musical traditions.</p>
+                </div>
+            </div>
+            
+            <div class="song-card" data-category="love">
+                <div class="song-header">
+                    <h3>Jalalo Bilalo</h3>
+                    <p>A Woman's Expression of Love</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/jRr-RVqP-l0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> This song expresses the longing of a woman deeply in love. The lyrics capture the intensity of emotion, yearning, and devotion that characterizes profound romantic attachments in Rajasthani folk traditions.
+                    </div>
+                    <p>The emotional depth of "Jalalo Bilalo" reveals how Rajasthani folk music provides women with a vehicle for expressing personal feelings that might otherwise remain unspoken in a traditional society. The passionate vocals and evocative instrumental accompaniment heighten the emotional impact of the lyrics.</p>
+                </div>
+            </div>
+            
+            <div class="song-card" data-category="festive">
+                <div class="song-header">
+                    <h3>Boli Pyari Lage</h3>
+                    <p>Celebration of Language</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/4TSxPTfsF6U" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> "Boli Pyari Lage" translates to "Sweet Speech" or "The Language Sounds Beautiful." The song celebrates the beauty of the Rajasthani dialect and the charm of sweet conversation between lovers.
+                    </div>
+                    <p>This upbeat folk song showcases the musicality of the Rajasthani language itself. The playful rhythm and catchy melody highlight how language and music intertwine in Rajasthani folk traditions to create expressions of joy and attraction.</p>
+                </div>
+            </div>
+            
+            <div class="song-card" data-category="panihari">
+                <div class="song-header">
+                    <h3>Charkha</h3>
+                    <p>The Self-Reliant Woman's Song</p>
+                </div>
+                <div class="song-content">
+                    <div class="video-container">
+                        <iframe src="https://www.youtube.com/embed/2vNSAeJeAHQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                    <div class="song-meaning">
+                        <strong>Meaning:</strong> In this song, the protagonist calls charkha (spinning wheel) the master of her house and credits it for her success. The song represents the self-reliance and dignity of labor for Rajasthani women.
+                    </div>
+                    <p>Beyond its literal meaning, "Charkha" symbolizes the economic independence that traditional skills provided to women. The spinning wheel serves as a metaphor for self-sufficiency, consistent with Gandhian values that later embraced the charkha as a symbol of economic independence.</p>
                 </div>
             </div>
         </div>
@@ -509,6 +1086,70 @@
                     <p>A bowed string instrument with three to four main strings and up to 35 sympathetic strings. It's capable of mimicking the human voice and is a principal instrument in Rajasthani folk ensemble.</p>
                 </div>
             </div>
+            
+            <div class="accordion">
+                <div class="accordion-header">
+                    <h3>More Traditional Instruments</h3>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="accordion-content">
+                    <div class="music-types">
+                        <div class="music-type">
+                            <h3>Algoza</h3>
+                            <p>A paired flute, played simultaneously by a single player. One flute plays the melody while the other provides the drone accompaniment, creating a hypnotic, continuous sound.</p>
+                        </div>
+                        <div class="music-type">
+                            <h3>Bhapang</h3>
+                            <p>A single-stringed percussion instrument with a wooden body and gut string. The player strikes the string with a small stick while manipulating tension to create different notes.</p>
+                        </div>
+                        <div class="music-type">
+                            <h3>Khartal</h3>
+                            <p>A wooden clapper consisting of two rectangular pieces of wood with small metal jingles attached. Players create complex rhythmic patterns by striking the pieces together between their fingers.</p>
+                        </div>
+                        <div class="music-type">
+                            <h3>Dholak</h3>
+                            <p>A double-headed drum widely used in Rajasthani folk music. It's played with both hands and provides the rhythmic foundation for many folk songs and dances.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <div class="decorative-border">
+            <div class="dec-red"></div>
+            <div class="dec-orange"></div>
+            <div class="dec-yellow"></div>
+            <div class="dec-blue"></div>
+            <div class="dec-green"></div>
+        </div>
+        
+        <section class="intro">
+            <h2 class="section-title">The Cultural Geography of Rajasthani Music</h2>
+            <p>Rajasthan's diverse geographical regions each contribute unique musical styles and traditions to the state's rich cultural tapestry. From the desert landscapes of Jaisalmer to the lake city of Udaipur, each area has developed distinctive musical characteristics influenced by local history, community practices, and environmental factors.</p>
+            
+            <div class="music-types">
+                <div class="music-type">
+                    <h3>Marwar Region</h3>
+                    <p>Encompassing Jodhpur, Barmer, and surrounding areas, the Marwar region is known for the Manganiyar and Langa musicians who perform songs with strong desert influences. Their music often features kamaicha and dholak instruments with lyrics celebrating royal patrons and desert life.</p>
+                </div>
+                <div class="music-type">
+                    <h3>Mewar Region</h3>
+                    <p>Centered around Udaipur, the Mewar region's music demonstrates more ceremonial elements and court traditions. The area is known for its traditions of royal court music and devotional singing with influences from surrounding Malwa and Gujarat regions.</p>
+                </div>
+                <div class="music-type">
+                    <h3>Shekhawati Region</h3>
+                    <p>This northeastern region including Sikar and Jhunjhunu is known for its distinctive folk ballads and seasonal songs. Musical narratives often feature historical events and stories of local heroes with unique vocal techniques.</p>
+                </div>
+                <div class="music-type">
+                    <h3>Hadoti Region</h3>
+                    <p>Comprising Kota, Bundi, and surrounding areas, this region's music shows stronger influences from neighboring Malwa. The songs here often feature themes of agriculture, seasonal celebrations, and local legends with distinctive instruments like the bana.</p>
+                </div>
+            </div>
+            
+            <div class="cultural-note">
+                <h4>Rajasthani Folk Music Today</h4>
+                <p>Contemporary performers are bringing Rajasthani folk traditions to global audiences, with artists like Mame Khan, Kutle Khan, and groups like Rajasthan Josh achieving international recognition. Collaborative projects with world musicians have introduced these ancient musical forms to new listeners, while helping preserve traditions that might otherwise fade away in the digital age. Festivals like Jodhpur RIFF (Rajasthan International Folk Festival) provide platforms for both traditional performers and innovative fusion projects.</p>
+            </div>
         </section>
         
         <div class="decorative-border">
@@ -533,6 +1174,10 @@
         </section>
     </div>
     
+    <div id="scroll-top" class="scroll-top">
+        <i class="fas fa-arrow-up"></i>
+    </div>
+    
     <footer class="footer">
         <div class="container">
             <img src="https://i.pinimg.com/474x/f5/8e/48/f58e48e07faaa161dee2ead7fc8d48df.jpg" class="mandana-pattern mandana-bottom-left" alt="Mandana Pattern">
@@ -546,5 +1191,198 @@
             </div>
         </div>
     </footer>
+    
+    <script>
+        // Search functionality
+        const songSearch = document.getElementById('song-search');
+        const searchButton = document.getElementById('search-button');
+        const searchResults = document.getElementById('search-results');
+        const songsContainer = document.getElementById('songs-container');
+        const songCards = document.querySelectorAll('.song-card');
+        
+        // Song database for search
+        const songDatabase = Array.from(songCards).map(card => {
+            const title = card.querySelector('h3').innerText;
+            const subtitle = card.querySelector('.song-header p').innerText;
+            const content = card.querySelector('.song-content').innerText;
+            const category = card.getAttribute('data-category');
+            return {
+                title,
+                subtitle,
+                content,
+                category,
+                element: card
+            };
+        });
+        
+        // Search function
+        function performSearch() {
+            const query = songSearch.value.toLowerCase().trim();
+            if (query.length < 2) {
+                searchResults.classList.remove('active');
+                return;
+            }
+            
+            const results = songDatabase.filter(song => 
+                song.title.toLowerCase().includes(query) || 
+                song.subtitle.toLowerCase().includes(query) || 
+                song.content.toLowerCase().includes(query)
+            );
+            
+            displaySearchResults(results, query);
+        }
+        
+        function displaySearchResults(results, query) {
+            searchResults.innerHTML = '';
+            
+            if (results.length === 0) {
+                searchResults.innerHTML = `<p class="p-4">No songs found matching "${query}"</p>`;
+                searchResults.classList.add('active');
+                return;
+            }
+            
+            results.forEach(result => {
+                const resultItem = document.createElement('div');
+                resultItem.classList.add('result-item');
+                
+                // Highlight the search term in the title
+                let titleHtml = result.title;
+                if (result.title.toLowerCase().includes(query)) {
+                    titleHtml = result.title.replace(new RegExp(query, 'gi'), match => `<span class="highlight">${match}</span>`);
+                }
+                
+                resultItem.innerHTML = `
+                    <h4>${titleHtml}</h4>
+                    <p>${result.subtitle}</p>
+                `;
+                
+                resultItem.addEventListener('click', () => {
+                    // Scroll to the song card
+                    result.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    
+                    // Highlight the card temporarily
+                    result.element.style.transform = 'scale(1.02)';
+                    result.element.style.boxShadow = '0 0 20px rgba(255,138,101,0.6)';
+                    setTimeout(() => {
+                        result.element.style.transform = '';
+                        result.element.style.boxShadow = '';
+                    }, 2000);
+                    
+                    // Close search results
+                    searchResults.classList.remove('active');
+                });
+                
+                searchResults.appendChild(resultItem);
+            });
+            
+            searchResults.classList.add('active');
+        }
+        
+        searchButton.addEventListener('click', performSearch);
+        songSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
+        // Close search results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!searchResults.contains(e.target) && e.target !== songSearch && e.target !== searchButton) {
+                searchResults.classList.remove('active');
+            }
+        });
+        
+        // Category filters
+        const categoryFilters = document.querySelectorAll('.category-filter');
+        
+        categoryFilters.forEach(filter => {
+            filter.addEventListener('click', () => {
+                // Update active state
+                categoryFilters.forEach(f => f.classList.remove('active'));
+                filter.classList.add('active');
+                
+                const category = filter.getAttribute('data-category');
+                
+                // Filter songs
+                songCards.forEach(card => {
+                    if (category === 'all' || card.getAttribute('data-category') === category) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        });
+        
+        // Tabs functionality
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.getAttribute('data-tab');
+                
+                // Update active tab
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Show active content
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                    if (content.id === tabId) {
+                        content.classList.add('active');
+                    }
+                });
+            });
+        });
+        
+        // Accordion functionality
+        const accordionHeaders = document.querySelectorAll('.accordion-header');
+        
+        accordionHeaders.forEach(header => {
+            header.addEventListener('click', () => {
+                const content = header.nextElementSibling;
+                const icon = header.querySelector('i');
+                
+                content.classList.toggle('active');
+                
+                if (content.classList.contains('active')) {
+                    icon.classList.remove('fa-chevron-down');
+                    icon.classList.add('fa-chevron-up');
+                } else {
+                    icon.classList.remove('fa-chevron-up');
+                    icon.classList.add('fa-chevron-down');
+                }
+            });
+        });
+        
+        // Scroll to top button
+        const scrollTopButton = document.getElementById('scroll-top');
+        
+        window.addEventListener('scroll', () => {
+            if (window.pageYOffset > 300) {
+                scrollTopButton.classList.add('visible');
+            } else {
+                scrollTopButton.classList.remove('visible');
+            }
+        });
+        
+        scrollTopButton.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+        
+        // Tag cloud functionality
+        const tags = document.querySelectorAll('.tag');
+        
+        tags.forEach(tag => {
+            tag.addEventListener('click', () => {
+                songSearch.value = tag.innerText;
+                performSearch();
+            });
+        });
+    </script>
 </body>
 </html>
