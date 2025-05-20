@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rangilo Rajasthan - Interactive Quiz Game</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: #333;
+            background-color: #FFF8E1;
+            background-image: 
+                radial-gradient(var(--rajasthani-yellow) 3px, transparent 3px),
+                radial-gradient(var(--rajasthani-orange) 3px, transparent 3px);
+            background-size: 60px 60px;
+            background-position: 0 0, 30px 30px;
+            background-attachment: fixed;
+            background-blend-mode: multiply;
+            opacity: 0.97;
+        }
+        
+        .header {
+            background: linear-gradient(to right, #E94822, #F2A51A);
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .category-card {
+            border-radius: 8px;
+            padding: 20px;
+            margin: 10px;
+            cursor: pointer;
+            transition: transform 0.3s;
+            border-bottom: 5px solid #E94822;
+        }
+        
+        .category-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .category-icon {
+            background-color: #FFE5D3;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            color: #E94822;
+        }
+        
+        .btn-primary {
+            background-color: #E94822;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background-color: #D13711;
+        }
+        
+        .option-btn {
+            display: block;
+            width: 100%;
+            background-color: #FFF5E6;
+            border: 1px solid #E94822;
+            border-radius: 5px;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .option-btn:hover {
+            background-color: #FFE5D3;
+        }
+        
+        .option-btn.correct {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .option-btn.incorrect {
+            background-color: #F44336;
+            color: white;
+        }
+        
+        .fun-fact {
+            background-color: #FFF5E6;
+            border-left: 5px solid #F2A51A;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        footer {
+            background-color: #222;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            margin-top: 40px;
+        }
+        
+        /* Progress bar */
+        .progress-container {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            height: 10px;
+            background-color: #E94822;
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.5s;
+        }
+        
+        /* Results page */
+        .result-container {
+            text-align: center;
+            padding: 30px;
+        }
+        
+        .score-display {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #E94822;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <nav style="text-align:center; padding:10px;">
+    <a href="index.html">Home</a> |
+    <a href="Quize.html">Quize</a> |
+    <a href="about.html">About</a> |
+    <a href="contact.html">Contact</a> |
+    <a href="privacy.html">Privacy Policy</a> |
+    <a href="disclaimer.html">Disclaimer</a>
+    </nav>
+
+    <div class="header">
+        <h1 class="text-3xl font-bold">Rangilo Rajasthan</h1>
+        <p class="text-xl">A Cultural Heritage Quiz Game</p>
+    </div>
+    
+    <!-- Home Screen -->
+    <div id="home-screen" class="container my-8">
+        <h2 class="text-2xl font-bold text-center mb-4">Welcome to Rangilo Rajasthan!</h2>
+        
+        <p class="text-center mb-6">
+            Embark on a cultural journey through the vibrant state of Rajasthan. This quiz game celebrates the diverse cultural heritage including dialects, forts, music, festivals, instruments, traditional attire, and folk wisdom.
+        </p>
+        
+        <p class="text-center mb-10">
+            Test your knowledge, learn fascinating facts, and earn "Rang Points" as you explore the rich traditions of the Land of Kings!
+        </p>
+        
+        <h3 class="text-xl font-bold text-center mb-6">Choose a Quiz Category</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Category 1: Dialects -->
+            <div class="category-card" onclick="startQuiz('dialect')">
+                <div class="category-icon">
+                    <i class="fas fa-comments text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">What's It Called in Your Dialect?</h4>
+                <p class="text-center text-sm mt-2">Test your knowledge of Rajasthani dialects</p>
+            </div>
+            
+            <!-- Category 2: Forts -->
+            <div class="category-card" onclick="startQuiz('fort')">
+                <div class="category-icon">
+                    <i class="fas fa-fort-awesome text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Guess the Fort</h4>
+                <p class="text-center text-sm mt-2">Identify Rajasthan's magnificent forts</p>
+            </div>
+            
+            <!-- Category 3: Folk Music -->
+            <div class="category-card" onclick="startQuiz('music')">
+                <div class="category-icon">
+                    <i class="fas fa-music text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Which Folk Style Fits?</h4>
+                <p class="text-center text-sm mt-2">Match songs with their folk music styles</p>
+            </div>
+            
+            <!-- Category 4: Lyrics -->
+            <div class="category-card" onclick="startQuiz('lyrics')">
+                <div class="category-icon">
+                    <i class="fas fa-file-alt text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Complete the Lyrics</h4>
+                <p class="text-center text-sm mt-2">Fill in the missing words in folk songs</p>
+            </div>
+            
+            <!-- Category 5: Instruments -->
+            <div class="category-card" onclick="startQuiz('instrument')">
+                <div class="category-icon">
+                    <i class="fas fa-guitar text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Name the Instrument</h4>
+                <p class="text-center text-sm mt-2">Identify traditional Rajasthani instruments</p>
+            </div>
+            
+            <!-- Category 6: Region/Dialect -->
+            <div class="category-card" onclick="startQuiz('region')">
+                <div class="category-icon">
+                    <i class="fas fa-map-marked-alt text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Which Region or Dialect?</h4>
+                <p class="text-center text-sm mt-2">Match phrases to their regional origins</p>
+            </div>
+            
+            <!-- Category 7: Riddles/Proverbs -->
+            <div class="category-card" onclick="startQuiz('riddle')">
+                <div class="category-icon">
+                    <i class="fas fa-brain text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Solve the Riddle or Proverb</h4>
+                <p class="text-center text-sm mt-2">Decipher traditional Rajasthani wisdom</p>
+            </div>
+            
+            <!-- Category 8: Festivals -->
+            <div class="category-card" onclick="startQuiz('festival')">
+                <div class="category-icon">
+                    <i class="fas fa-fire text-2xl"></i>
+                </div>
+                <h4 class="text-lg font-bold text-center">Festival and Ritual Quiz</h4>
+                <p class="text-center text-sm mt-2">Explore Rajasthan's colorful celebrations</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quiz Screen -->
+    <div id="quiz-screen" class="container my-8 hidden">
+        <div class="flex justify-between items-center mb-4">
+            <button onclick="returnHome()" class="btn-primary">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Categories
+            </button>
+            <div id="score-display" class="font-bold text-xl">Rang Points: 0</div>
+        </div>
+        
+        <div class="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        
+        <h2 id="quiz-category" class="text-2xl font-bold text-center mb-2">Category Title</h2>
+        
+        <div id="question-container" class="mb-8">
+            <h3 id="question-number" class="text-lg font-bold mb-2">Question 1/5</h3>
+            <p id="question-text" class="text-xl mb-4">Question text goes here?</p>
+            
+            <div id="options-container">
+                <!-- Options will be inserted here dynamically -->
+            </div>
+        </div>
+        
+        <div id="feedback-container" class="hidden">
+            <div id="answer-feedback" class="p-4 rounded-lg mb-4"></div>
+            
+            <div id="fun-fact" class="fun-fact">
+                <h4 class="font-bold">Fun Fact:</h4>
+                <p id="fun-fact-text">Fun fact about the answer will appear here.</p>
+            </div>
+            
+            <button id="next-button" onclick="nextQuestion()" class="btn-primary mt-4 block ml-auto">
+                Next Question <i class="fas fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Results Screen -->
+    <div id="results-screen" class="container my-8 hidden">
+        <div class="result-container">
+            <h2 class="text-2xl font-bold mb-4">Quiz Completed!</h2>
+            
+            <p class="mb-2">Your final score:</p>
+            <div id="final-score" class="score-display">0 Rang Points</div>
+            
+            <p id="result-message" class="text-lg mb-8">Congratulatory message based on score</p>
+            
+            <button onclick="returnHome()" class="btn-primary">
+                Try Another Category <i class="fas fa-redo ml-2"></i>
+            </button>
+        </div>
+    </div>
+    
+    <footer>
+        © 2025 Rangilo Rajasthan - A Cultural Heritage Quiz | All content for educational purposes
+    </footer>
+    
+    <script>
+        // Quiz data
+        const quizData = {
+            dialect: {
+                name: "What's It Called in Your Dialect?",
+                questions: [
+                    {
+                        question: "What is 'water' called in Marwari dialect?",
+                        options: ["Paani", "Jal", "Neeru", "Piyau"],
+                        answer: 2,
+                        funFact: "The word 'Neeru' for water is unique to Marwari dialect and reflects the precious nature of water in the desert state of Rajasthan."
+                    },
+                    {
+                        question: "The Hindi word 'Jhadu' (broom) is known as what in Shekhawati dialect?",
+                        options: ["Buharu", "Jhadni", "Pocha", "Baari"],
+                        answer: 0,
+                        funFact: "The Shekhawati region is not only known for its unique dialect but also for its beautifully painted havelis (mansions) with intricate frescoes."
+                    },
+                    {
+                        question: "What is a camel called in Mewari dialect?",
+                        options: ["Oont", "Unth", "Unta", "Sandni"],
+                        answer: 1,
+                        funFact: "Mewari is spoken primarily in Udaipur, Chittorgarh, Rajsamand, and parts of Bhilwara districts, and has many words reflecting the region's rich royal history."
+                    },
+                    {
+                        question: "In Harauti dialect, what is the word for 'love'?",
+                        options: ["Prem", "Pyaar", "Mhaba", "Preet"],
+                        answer: 2,
+                        funFact: "Harauti dialect is spoken primarily in the Hadoti region of Rajasthan, comprising Kota, Bundi, Baran, and Jhalawar districts."
+                    },
+                    {
+                        question: "What is the Marwari word for 'tomorrow'?",
+                        options: ["Kal", "Kaale", "Dusre din", "Aavti kaal"],
+                        answer: 1,
+                        funFact: "Marwari is the most widely spoken Rajasthani dialect and has influenced many other dialects across the state."
+                    }
+                ]
+            },
+            fort: {
+                name: "Guess the Fort",
+                questions: [
+                    {
+                        question: "Which fort is known for having the second-longest wall in the world after the Great Wall of China?",
+                        options: ["Jaisalmer Fort", "Mehrangarh Fort", "Kumbhalgarh Fort", "Chittorgarh Fort"],
+                        answer: 2,
+                        funFact: "Kumbhalgarh Fort's wall extends over 36 kilometers and is often called the 'Great Wall of India'. It was built in the 15th century by Rana Kumbha."
+                    },
+                    {
+                        question: "Which fort is known as the 'Golden Fort' due to its yellow sandstone construction?",
+                        options: ["Amber Fort", "Junagarh Fort", "Jaisalmer Fort", "Taragarh Fort"],
+                        answer: 2,
+                        funFact: "Jaisalmer Fort is one of the few 'living forts' in the world, with about a quarter of the city's population still living within its walls."
+                    },
+                    {
+                        question: "Which fort houses the famous Moti Mahal, Sheesh Mahal, and Sukh Mahal?",
+                        options: ["Amber Fort", "Nahargarh Fort", "Mehrangarh Fort", "Junagarh Fort"],
+                        answer: 0,
+                        funFact: "The Amber Fort (also known as Amer Fort) features an ingenious water cooling system and the Sheesh Mahal (Mirror Palace) creates a dazzling effect with just a single candle."
+                    },
+                    {
+                        question: "Which fort is known for its three main gates named Padal Pol, Jorla Pol, and Laxman Pol?",
+                        options: ["Chittorgarh Fort", "Ranthambore Fort", "Taragarh Fort", "Gagron Fort"],
+                        answer: 0,
+                        funFact: "Chittorgarh Fort is the largest fort in India covering 700 acres and is associated with the legendary tale of Queen Padmini's jauhar (self-immolation)."
+                    },
+                    {
+                        question: "Which fort overlooks the city of Jodhpur and is named after the sun deity?",
+                        options: ["Mehrangarh Fort", "Nahargarh Fort", "Suryagarh Fort", "Sonar Fort"],
+                        answer: 0,
+                        funFact: "Mehrangarh means 'Fort of the Sun'. Rudyard Kipling once described it as 'the work of angels, fairies and giants'."
+                    }
+                ]
+            },
+            music: {
+                name: "Which Folk Style Fits?",
+                questions: [
+                    {
+                        question: "The song 'Kesariya Balam' is associated with which folk music style of Rajasthan?",
+                        options: ["Maand", "Ghoomar", "Kalbeliya", "Panihari"],
+                        answer: 0,
+                        funFact: "Maand is a sophisticated classical style that evolved in the royal courts of Rajasthan and is often centered around themes of love and separation."
+                    },
+                    {
+                        question: "The song 'Gorband Nakhralo' belongs to which folk style?",
+                        options: ["Bhavai", "Ghoomar", "Kalbeliya", "Terah Taali"],
+                        answer: 1,
+                        funFact: "Ghoomar is traditionally performed by women in flowing ghagra (skirts) and is associated with the Bhil tribe. It was originally a worship ritual for goddess Saraswati."
+                    },
+                    {
+                        question: "Which folk style would feature the song 'Nimbooda Nimbooda'?",
+                        options: ["Kalbeliya", "Panihari", "Maand", "Ghoomar"],
+                        answer: 3,
+                        funFact: "While 'Nimbooda' became famous through the film Hum Dil De Chuke Sanam, its roots are in traditional Ghoomar style danced during festivals like Teej."
+                    },
+                    {
+                        question: "Songs that tell stories of Pabuji, a folk deity, are typically in which style?",
+                        options: ["Pabuji ki Phad", "Maand", "Terah Taali", "Chang Nritya"],
+                        answer: 0,
+                        funFact: "Pabuji ki Phad is both a musical style and a form of mobile temple, with painted scrolls depicting the life of folk deity Pabuji. Performances can last all night."
+                    },
+                    {
+                        question: "The song 'Banna Re' would belong to which Rajasthani folk music tradition?",
+                        options: ["Kalbeliya", "Ghoomar", "Loor", "Panihari"],
+                        answer: 2,
+                        funFact: "Loor is a wedding folk dance performed by women to celebrate marriages. The term 'Banna' refers to the groom in Rajasthani language."
+                    }
+                ]
+            },
+            lyrics: {
+                name: "Complete the Lyrics",
+                questions: [
+                    {
+                        question: "Complete the lyrics: 'Kesariya balam aavo ni padhaaro ______ desh'",
+                        options: ["Mhara", "Mhala", "Mhade", "Mhane"],
+                        answer: 0,
+                        funFact: "'Kesariya Balam' is one of the most iconic folk songs of Rajasthan. The word 'Mhara' means 'my' or 'mine' in Rajasthani dialects."
+                    },
+                    {
+                        question: "Complete the lyrics: 'Ghoomar ghaalyo ____ mahari daar'",
+                        options: ["Raat", "Deen", "Mann", "Banni"],
+                        answer: 3,
+                        funFact: "In this Ghoomar song, 'Banni' refers to a bride. Ghoomar was traditionally performed by women on special occasions like weddings."
+                    },
+                    {
+                        question: "Complete the lyrics: 'Gorband _____ re mharo hi gorband'",
+                        options: ["Baandho", "Nakhralo", "Rangilo", "Sunalo"],
+                        answer: 1,
+                        funFact: "Gorband refers to a traditional ornament worn around the wrist. The full line translates to 'My ornament is full of grace/style'."
+                    },
+                    {
+                        question: "Complete the lyrics: 'Nimbooda nimbooda, _____ nimbooda'",
+                        options: ["Rangilo", "Rasilo", "Navrelo", "Navelo"],
+                        answer: 0,
+                        funFact: "The word 'Rangilo' means colorful or vibrant - a common descriptor in Rajasthani folk songs that reflects the colorful culture of the state."
+                    },
+                    {
+                        question: "Complete the lyrics: 'Banna re, baga mein _____ ghalyo'",
+                        options: ["Phool", "Jhula", "Paani", "Ghodo"],
+                        answer: 1,
+                        funFact: "This folk song describes setting up a swing (jhula) in the garden for the bride and groom, symbolizing the joy and playfulness of a new marriage."
+                    }
+                ]
+            },
+            instrument: {
+                name: "Name the Instrument",
+                questions: [
+                    {
+                        question: "Which traditional Rajasthani string instrument is believed to be the precursor to the violin and is made from a coconut shell with horsehair strings?",
+                        options: ["Ravanhatha", "Kamaicha", "Sindhi Sarangi", "Ektaro"],
+                        answer: 0,
+                        funFact: "The Ravanhatha is said to be one of the oldest bowed instruments in the world. According to legend, it was created by Ravana himself, hence the name 'Ravana-hasta' (Ravana's hand)."
+                    },
+                    {
+                        question: "Which percussion instrument from Rajasthan is played with sticks and is essential in all folk music performances?",
+                        options: ["Dholak", "Khartal", "Nagara", "Chang"],
+                        answer: 0,
+                        funFact: "The Dholak is a double-headed drum that provides the rhythmic foundation for Rajasthani folk music. It's typically played horizontally across the player's lap."
+                    },
+                    {
+                        question: "What is the name of the Rajasthani instrument that is placed in the mouth and produces sound when plucked?",
+                        options: ["Poongi", "Morchang", "Algoza", "Satara"],
+                        answer: 1,
+                        funFact: "The Morchang is similar to a Jew's harp and is made of metal. It's particularly associated with the Kalbeliya and Manganiyar communities of Rajasthan."
+                    },
+                    {
+                        question: "Which wind instrument is traditionally played by snake charmers in Rajasthan?",
+                        options: ["Algoza", "Narh", "Been (Pungi)", "Satara"],
+                        answer: 2,
+                        funFact: "The Been or Pungi is made from a gourd and two bamboo pipes. Its distinctive sound is created by continuous breathing techniques."
+                    },
+                    {
+                        question: "Which folk instrument of Rajasthan has 17 strings and is played primarily by the Manganiyar community?",
+                        options: ["Kamaicha", "Sindhi Sarangi", "Ravanhatha", "Jantar"],
+                        answer: 0,
+                        funFact: "The Kamaicha is made from a single piece of wood with a bowl-shaped resonator covered with goat leather. The Manganiyars are hereditary professional musicians who performed for the kings of Rajasthan."
+                    }
+                ]
+            },
+            region: {
+                name: "Which Region or Dialect?",
+                questions: [
+                    {
+                        question: "The phrase 'Mhari' (meaning 'mine' for females) is mostly used in which dialect?",
+                        options: ["Marwari", "Mewari", "Harauti", "Dhundhari"],
+                        answer: 0,
+                        funFact: "Marwari is the most widely spoken dialect in Rajasthan, covering regions like Jodhpur, Jaisalmer, Barmer, and Bikaner."
+                    },
+                    {
+                        question: "The greeting 'Khamma Ghani' is primarily associated with which region of Rajasthan?",
+                        options: ["Mewar (Udaipur)", "Marwar (Jodhpur)", "Shekhawati", "Hadoti"],
+                        answer: 1,
+                        funFact: "'Khamma Ghani' is a traditional Marwari greeting that literally means 'lots of forgiveness' but is used to express deep respect."
+                    },
+                    {
+                        question: "The word 'Tharo' (meaning 'yours') is commonly used in which dialect?",
+                        options: ["Dhundhari", "Mewati", "Shekhawati", "Bagri"],
+                        answer: 2,
+                        funFact: "The Shekhawati region, comprising Sikar, Jhunjhunu, and parts of Churu districts, is famous for its painted havelis and unique dialect."
+                    },
+                    {
+                        question: "The use of 'Hoon' instead of 'Main' (I) is characteristic of which dialect?",
+                        options: ["Marwari", "Mewari", "Bagri", "Harauti"],
+                        answer: 1,
+                        funFact: "Mewari is spoken around Udaipur, the 'City of Lakes', and has been influenced by both Gujarati and Malvi languages due to its geographic position."
+                    },
+                    {
+                        question: "The phrase 'Su Halchal' (How are you?) is typically used in which region?",
+                        options: ["Jaipur (Dhundhari)", "Bikaner (Marwari)", "Alwar (Mewati)", "Kota (Harauti)"],
+                        answer: 0,
+                        funFact: "Dhundhari is spoken in and around Jaipur, Rajasthan's capital, also known as the 'Pink City' for its distinctive terra cotta pink colored buildings."
+                    }
+                ]
+            },
+            riddle: {
+                name: "Solve the Riddle or Proverb",
+                questions: [
+                    {
+                        question: "Traditional Rajasthani riddle: 'Ek ghoda, do sawar?' (One horse, two riders) What does this refer to?",
+                        options: ["Camel", "Chappal (sandals)", "Scissors", "Sunglasses"],
+                        answer: 1,
+                        funFact: "Rajasthani riddles often use everyday objects in clever metaphorical ways. Chappals (sandals) carry two feet just as a horse carries riders."
+                    },
+                    {
+                        question: "What does the Rajasthani proverb 'Jahan na jave ravi, wahan jave kavi' mean?",
+                        options: ["Where the sun doesn't reach, the poet's words can", "The moon follows the sun", "Knowledge overcomes darkness", "Art outlasts nature"],
+                        answer: 0,
+                        funFact: "This proverb highlights the power of poetry and literature to illuminate even the darkest corners that sunlight cannot reach - both physically and metaphorically."
+                    },
+                    {
+                        question: "Solve this Rajasthani riddle: 'Hare bhare jungle mein laal laal phool, jungle jale to phool na jale?' (In a lush green jungle there's a red flower; when the jungle burns, the flower doesn't)",
+                        options: ["Tongue", "Blood", "Coral", "Sindoor (vermilion)"],
+                        answer: 0,
+                        funFact: "This is a classic Rajasthani riddle: the green jungle represents the mouth, and the red flower that doesn't burn is the tongue."
+                    },
+                    {
+                        question: "What is the meaning of the Rajasthani proverb 'Meh aur pavna bhagi ke hi aave'?",
+                        options: ["Only the brave succeed in battle", "Rain and guests come only to the fortunate", "Wealth follows wisdom", "Hard work brings good harvest"],
+                        answer: 1,
+                        funFact: "This proverb reflects the high value placed on hospitality in Rajasthani culture, and the precious nature of rain in the desert state."
+                    },
+                    {
+                        question: "Decode this Rajasthani saying: 'Oonth ke muh mein jeera' - What does it mean?",
+                        options: ["A small gift to an important person", "Too small to satisfy hunger", "A drop in the ocean", "Unappreciated generosity"],
+                        answer: 2,
+                        funFact: "Literally meaning 'a cumin seed in a camel's mouth,' this saying is similar to the English expression 'a drop in the ocean' - something too small to make a difference."
+                    }
+                ]
+            },
+            festival: {
+                name: "Festival and Ritual Quiz",
+                questions: [
+                    {
+                        question: "Which Rajasthani festival celebrates the worship of Goddess Gauri and is primarily observed by women?",
+                        options: ["Gangaur", "Teej", "Makar Sankranti", "Akha Teej"],
+                        answer: 0,
+                        funFact: "Gangaur is celebrated for 18 days with special significance for married women who pray for the well-being of their husbands, while unmarried women pray for good husbands."
+                    },
+                    {
+                        question: "During which festival do people fly kites all over Rajasthan?",
+                        options: ["Holi", "Diwali", "Makar Sankranti", "Teej"],
+                        answer: 2,
+                        funFact: "Makar Sankranti marks the sun's transition into Capricorn and the beginning of longer days. The sky fills with colorful kites as people celebrate the harvest season."
+                    },
+                    {
+                        question: "Which annual fair in Rajasthan is famous for its camel trading and competitions?",
+                        options: ["Pushkar Fair", "Nagaur Fair", "Kota Dussehra Mela", "Kolayat Fair"],
+                        answer: 0,
+                        funFact: "The Pushkar Camel Fair (Pushkar Mela) is one of the world's largest camel fairs, attracting thousands of camels, horses, and cattle, along with over 200,000 visitors."
+                    },
+                    {
+                        question: "Which festival is celebrated in Udaipur to welcome the arrival of spring?",
+                        options: ["Gangaur", "Mewar Festival", "Teej", "Kumbhalgarh Festival"],
+                        answer: 1,
+                        funFact: "The Mewar Festival coincides with Gangaur and culminates in a procession to Lake Pichola, where women carry images of Goddess Gauri to immerse them in the lake."
+                    },
+                    {
+                        question: "During which festival do women fast for the well-being of their husbands and adorn their hands with mehendi (henna)?",
+                        options: ["Karva Chauth", "Teej", "Gangaur", "Akha Teej"],
+                        answer: 1,
+                        funFact: "Teej celebrates the monsoon season and the union of Lord Shiva and Goddess Parvati. Women wear green saris symbolizing the lush vegetation brought by monsoon rains."
+                    }
+                ]
+            }
+        };
+        
+        // Variables to track quiz state
+        let currentCategory = "";
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let answeredQuestions = 0;
+        
+        // Function to start the quiz
+        function startQuiz(category) {
+            // Reset quiz state
+            currentCategory = category;
+            currentQuestionIndex = 0;
+            score = 0;
+            answeredQuestions = 0;
+            
+            // Update category title
+            document.getElementById("quiz-category").textContent = quizData[category].name;
+            
+            // Update score display
+            document.getElementById("score-display").textContent = "Rang Points: 0";
+            
+            // Load first question
+            loadQuestion();
+            
+            // Hide home screen, show quiz screen
+            document.getElementById("home-screen").classList.add("hidden");
+            document.getElementById("quiz-screen").classList.remove("hidden");
+            document.getElementById("results-screen").classList.add("hidden");
+            
+            // Reset progress bar
+            updateProgressBar();
+        }
+        
+        // Function to load question
+        function loadQuestion() {
+            const questionData = quizData[currentCategory].questions[currentQuestionIndex];
+            
+            // Update question number
+            document.getElementById("question-number").textContent = `Question ${currentQuestionIndex + 1}/${quizData[currentCategory].questions.length}`;
+            
+            // Update question text
+            document.getElementById("question-text").textContent = questionData.question;
+            
+            // Clear previous options
+            const optionsContainer = document.getElementById("options-container");
+            optionsContainer.innerHTML = "";
+            
+            // Add options
+            questionData.options.forEach((option, index) => {
+                const button = document.createElement("button");
+                button.className = "option-btn";
+                button.textContent = option;
+                button.onclick = () => selectAnswer(index);
+                optionsContainer.appendChild(button);
+            });
+            
+            // Hide feedback container
+            document.getElementById("feedback-container").classList.add("hidden");
+            
+            // Update progress bar
+            updateProgressBar();
+        }
+        
+        // Function to select answer
+        function selectAnswer(selectedIndex) {
+            const questionData = quizData[currentCategory].questions[currentQuestionIndex];
+            const correctIndex = questionData.answer;
+            
+            // Increment answered questions counter
+            answeredQuestions++;
+            
+            // Get all option buttons
+            const optionButtons = document.querySelectorAll(".option-btn");
+            
+            // Disable all buttons
+            optionButtons.forEach(button => {
+                button.disabled = true;
+            });
+            
+            // Mark correct and incorrect options
+            optionButtons[correctIndex].classList.add("correct");
+            
+            // Check if answer is correct
+            if (selectedIndex === correctIndex) {
+                // Correct answer
+                score += 10;
+                document.getElementById("score-display").textContent = `Rang Points: ${score}`;
+                
+                // Show feedback
+                const feedbackContainer = document.getElementById("feedback-container");
+                document.getElementById("answer-feedback").textContent = "Correct! +10 Rang Points";
+                document.getElementById("answer-feedback").className = "p-4 rounded-lg mb-4 bg-green-500 text-white";
+                
+                // Show fun fact
+                document.getElementById("fun-fact-text").textContent = questionData.funFact;
+                
+                feedbackContainer.classList.remove("hidden");
+                
+            } else {
+                // Incorrect answer
+                optionButtons[selectedIndex].classList.add("incorrect");
+                
+                // Show feedback
+                const feedbackContainer = document.getElementById("feedback-container");
+                document.getElementById("answer-feedback").textContent = `Incorrect! The correct answer is: ${questionData.options[correctIndex]}`;
+                document.getElementById("answer-feedback").className = "p-4 rounded-lg mb-4 bg-red-500 text-white";
+                
+                // Show fun fact
+                document.getElementById("fun-fact-text").textContent = questionData.funFact;
+                
+                feedbackContainer.classList.remove("hidden");
+            }
+            
+            // Update button text based on question number
+            const nextButton = document.getElementById("next-button");
+            if (currentQuestionIndex === quizData[currentCategory].questions.length - 1) {
+                nextButton.innerHTML = 'See Results <i class="fas fa-trophy ml-2"></i>';
+            } else {
+                nextButton.innerHTML = 'Next Question <i class="fas fa-arrow-right ml-2"></i>';
+            }
+        }
+        
+        // Function to move to next question
+        function nextQuestion() {
+            // Check if this was the last question
+            if (currentQuestionIndex === quizData[currentCategory].questions.length - 1) {
+                showResults();
+            } else {
+                // Move to next question
+                currentQuestionIndex++;
+                loadQuestion();
+            }
+        }
+        
+        // Function to show quiz results
+        function showResults() {
+            // Hide quiz screen, show results screen
+            document.getElementById("quiz-screen").classList.add("hidden");
+            document.getElementById("results-screen").classList.remove("hidden");
+            
+            // Update final score display
+            document.getElementById("final-score").textContent = `${score} Rang Points`;
+            
+            // Generate result message based on score
+            const totalPossibleScore = quizData[currentCategory].questions.length * 10;
+            const percentage = (score / totalPossibleScore) * 100;
+            
+            let resultMessage = "";
+            if (percentage >= 90) {
+                resultMessage = "Extraordinary! You're a true Rajasthani culture expert!";
+            } else if (percentage >= 70) {
+                resultMessage = "Great job! You know Rajasthan's heritage very well!";
+            } else if (percentage >= 50) {
+                resultMessage = "Good effort! You have a decent understanding of Rajasthani culture.";
+            } else {
+                resultMessage = "Thanks for playing! Explore more about Rajasthan's rich heritage.";
+            }
+            
+            document.getElementById("result-message").textContent = resultMessage;
+        }
+        
+        // Function to return to home screen
+        function returnHome() {
+            document.getElementById("home-screen").classList.remove("hidden");
+            document.getElementById("quiz-screen").classList.add("hidden");
+            document.getElementById("results-screen").classList.add("hidden");
+        }
+        
+        // Function to update progress bar
+        function updateProgressBar() {
+            const totalQuestions = quizData[currentCategory].questions.length;
+            const progressPercentage = (answeredQuestions / totalQuestions) * 100;
+            document.getElementById("progress-bar").style.width = `${progressPercentage}%`;
+        }
+    </script>
+</body>
+</html>
