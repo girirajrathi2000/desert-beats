@@ -3,24 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>PointMe</title>
+<title>PointMe | Precise</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root {
-    --bg: #090b0f;
-    --surface: #111520;
-    --surface2: #171d2c;
-    --border: #1e2a40;
-    --border2: #2a3855;
-    --north: #e84040;
-    --target: #f5a623;
-    --gps: #00d4aa;
-    --text: #dce8f5;
-    --muted: #4a607a;
-    --dim: #263347;
-    --success: #22c97e;
+    --bg: #090b0f; --surface: #111520; --surface2: #171d2c;
+    --border: #1e2a40; --border2: #2a3855; --north: #e84040;
+    --target: #f5a623; --gps: #00d4aa; --text: #dce8f5;
+    --muted: #4a607a; --dim: #263347; --success: #22c97e;
   }
   *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); }
@@ -191,7 +183,6 @@
 </head>
 <body>
 
-<!-- HOME -->
 <div class="page active" id="pgHome">
   <div class="home-glow"></div>
   <div class="home-icon">🧭</div>
@@ -203,7 +194,6 @@
   </div>
 </div>
 
-<!-- CREATE -->
 <div class="page" id="pgCreate">
   <div class="topbar">
     <button class="topbar-back" onclick="App.goHome()">←</button>
@@ -215,7 +205,6 @@
     <button class="tab" id="tabMap" onclick="App.setTab('map')">🗺 Drop on Map</button>
   </div>
   <div class="scroll-body">
-    <!-- COMPASS PANEL -->
     <div id="panelCompass">
       <div class="compass-legend">
         <div class="legend-item"><div class="legend-dot" style="background:var(--north)"></div> North</div>
@@ -246,14 +235,12 @@
         <div class="alt-ends"><span>↙ Down −90°</span><span>Horizontal</span><span>↗ Up +90°</span></div>
       </div>
     </div>
-    <!-- MAP PANEL -->
     <div id="panelMap" style="display:none;padding:12px 0 0">
       <div class="map-wrap">
         <div class="map-hint" id="createMapHint">👆 Tap map to place pin</div>
         <div id="createMapEl" style="height:320px"></div>
       </div>
     </div>
-    <!-- FORM -->
     <div class="divider"></div>
     <div class="form-block">
       <div class="field">
@@ -313,7 +300,6 @@
   </div>
 </div>
 
-<!-- SHARE -->
 <div class="page" id="pgShare">
   <div class="topbar">
     <button class="topbar-back" onclick="App.goHome()">←</button>
@@ -337,7 +323,6 @@
   </div>
 </div>
 
-<!-- JOIN -->
 <div class="page" id="pgJoin">
   <div class="topbar" style="position:absolute;top:0;left:0;right:0">
     <button class="topbar-back" onclick="App.goHome()">←</button>
@@ -351,7 +336,6 @@
   <button class="btn btn-ghost" style="max-width:340px;width:100%" onclick="App.goHome()">Cancel</button>
 </div>
 
-<!-- NAVIGATE -->
 <div class="page" id="pgNav">
   <div class="topbar">
     <button class="topbar-back" onclick="App.goHome()">←</button>
@@ -416,6 +400,12 @@ const toR = d => d * RAD, toD = r => r * DEG;
 const CARDS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 const card = d => CARDS[Math.round(((d%360)+360)%360/22.5)%16];
 
+// Optimized angle smoothing (LERP)
+const lerpAngle = (a, b, t) => {
+    let delta = ((b - a + 540) % 360) - 180;
+    return (a + delta * t + 360) % 360;
+};
+
 function haversine(a,b,c,d){
   const R=6371000,dL=toR(c-a),dN=toR(d-b);
   const x=Math.sin(dL/2)**2+Math.cos(toR(a))*Math.cos(toR(c))*Math.sin(dN/2)**2;
@@ -449,6 +439,9 @@ function showToast(msg,err=false){
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   $(id).classList.add('active');
+  // Refresh maps if needed
+  if(id==='pgCreate' && CMap.map) setTimeout(()=>CMap.map.invalidateSize(), 100);
+  if(id==='pgNav' && Nav.map) setTimeout(()=>Nav.map.invalidateSize(), 100);
 }
 
 // ─── GPS ───
@@ -460,7 +453,7 @@ const GPS={
       this.lat=p.coords.latitude;this.lng=p.coords.longitude;this.acc=p.coords.accuracy;
       this._badge();
       Nav.onGPS();
-    },()=>this._badge(),{enableHighAccuracy:true,maximumAge:0,timeout:5000});
+    },()=>this._badge(),{enableHighAccuracy:true,maximumAge:0,timeout:10000});
   },
   _badge(){
     [['cGpsBadge','cGpsText'],['nGpsBadge','nGpsText']].forEach(([b,t])=>{
@@ -474,70 +467,64 @@ const GPS={
   }
 };
 
-// ─── ORIENTATION ───
-const Orient = {
+// ─── ORIENTATION (Anti-Jitter) ───
+const Orient={
   heading: null,
-  targetHeading: null,
+  rawHeading: null,
+  pitch: null,
   active: false,
-  smoothing: 0.15, // Lower = smoother but slower
+  smoothing: 0.12, // Lower = smoother
 
-  lerpAngle(a, b, t) {
-    let delta = ((b - a + 540) % 360) - 180;
-    return (a + delta * t + 360) % 360;
-  },
-
-  start() {
-    if (this.active) return;
+  start(){
+    if(this.active) return;
     this.active = true;
     const h = e => {
-      let rawHead = e.webkitCompassHeading || (360 - e.alpha);
-      if (this.heading === null) {
-        this.heading = rawHead;
-      } else {
-        // This line removes the jitter
-        this.heading = this.lerpAngle(this.heading, rawHead, this.smoothing);
+      let raw = e.webkitCompassHeading || (360 - (e.alpha || 0));
+      this.rawHeading = raw;
+      
+      // Interpolate heading to remove jitter
+      if(this.heading === null) this.heading = raw;
+      else this.heading = lerpAngle(this.heading, raw, this.smoothing);
+
+      if(typeof e.beta === 'number'){
+        const rawPitch = e.beta - 90;
+        this.pitch = this.pitch === null ? rawPitch : this.pitch + (rawPitch - this.pitch) * 0.2;
       }
     };
     window.addEventListener('deviceorientationabsolute', h, true);
     window.addEventListener('deviceorientation', h, true);
-  }
-};
-  requestAndStart(cb){
-    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+  },
+  requestAndStart(){
+    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
       DeviceOrientationEvent.requestPermission().then(s=>{
-        if(s==='granted')this.start(cb);
-        else showToast('Compass permission denied — drag needle manually',true);
+        if(s==='granted') this.start();
+        else showToast('Compass permission denied',true);
       }).catch(()=>showToast('Could not get compass access',true));
     } else {
-      this.start(cb);
+      this.start();
     }
   }
 };
 
 // ─── COMPASS DRAWING ───
 function drawCompassCanvas(id, heading, targetBearing, opts){
-  const canvas = $(id);
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const canvas=$(id); if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,R=Math.min(cx,cy)-6;
   
-  // Clear and reset the state
   ctx.setTransform(1, 0, 0, 1, 0, 0); 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Outer glow
+  ctx.clearRect(0,0,W,H);
+
   const gr=ctx.createRadialGradient(cx,cy,R*0.5,cx,cy,R);
   gr.addColorStop(0,'rgba(245,166,35,0)');gr.addColorStop(1,'rgba(245,166,35,0.05)');
   ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=gr;ctx.fill();
 
-  // ── ROTATE CANVAS for north-up ──
-  // All ticks/labels are drawn in rotated space so they represent absolute directions.
-  // Needles are drawn in screen space (not rotated).
   ctx.save();
   ctx.translate(cx,cy);
-  if(heading!==null)ctx.rotate(toR(-heading));
+  if(heading!==null) ctx.rotate(toR(-heading));
 
-  // Rings
+  // Outer Ring
   ctx.beginPath();ctx.arc(0,0,R,0,Math.PI*2);ctx.strokeStyle='#2a3855';ctx.lineWidth=2;ctx.stroke();
-  ctx.beginPath();ctx.arc(0,0,R*0.62,0,Math.PI*2);ctx.strokeStyle='rgba(42,56,85,0.35)';ctx.lineWidth=1;ctx.stroke();
 
   // Ticks
   for(let i=0;i<360;i+=5){
@@ -548,32 +535,25 @@ function drawCompassCanvas(id, heading, targetBearing, opts){
     ctx.strokeStyle=big?'rgba(200,215,235,0.5)':'rgba(42,56,85,0.9)';ctx.lineWidth=big?2:1;ctx.stroke();
   }
 
-  // Cardinal letters
   [['N',0,'#e84040'],['E',90,'#4a607a'],['S',180,'#4a607a'],['W',270,'#4a607a']].forEach(([l,deg,col])=>{
     const a=toR(deg-90);
     ctx.font='bold 13px Outfit,sans-serif';ctx.fillStyle=col;ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText(l,Math.cos(a)*(R-28),Math.sin(a)*(R-28));
   });
+  ctx.restore();
 
-  ctx.restore(); // end rotated section
-
-  // ── NORTH NEEDLE (always 12 o'clock = up on screen) ──
+  // North Needle (Fixed Up)
   _drawNeedle(ctx,cx,cy,R,0,'#e84040',8,0.88,true);
-
-  // ── TARGET NEEDLE (screen angle = absolute bearing minus device heading) ──
+  // Target Needle (Calculated screen bearing)
   let sa=(targetBearing-(heading||0)+360)%360;
   _drawNeedle(ctx,cx,cy,R,sa,'#f5a623',9,1.0,false);
 
-  // Center hub
+  // Hub
   ctx.beginPath();ctx.arc(cx,cy,11,0,Math.PI*2);ctx.fillStyle='#090b0f';ctx.fill();
   ctx.strokeStyle='#4a607a';ctx.lineWidth=1.5;ctx.stroke();
-  ctx.beginPath();ctx.arc(cx,cy,4.5,0,Math.PI*2);ctx.fillStyle='#dce8f5';ctx.fill();
-
-  // Center text
-  if(opts&&opts.centerText){
+  if(opts && opts.centerText){
     ctx.fillStyle='rgba(220,232,245,0.45)';ctx.font='600 13px Outfit,sans-serif';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(opts.centerText,cx,cy+24);
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(opts.centerText,cx,cy+24);
   }
 }
 
@@ -585,12 +565,9 @@ function _drawNeedle(ctx,cx,cy,R,angleDeg,color,hw,alpha,dimBack){
   const rx=cx+Math.cos(a-Math.PI/2)*hw,ry=cy+Math.sin(a-Math.PI/2)*hw;
   const bx=cx-Math.cos(a)*back,by=cy-Math.sin(a)*back;
   ctx.save();
-  ctx.globalAlpha=alpha;ctx.shadowColor=color;ctx.shadowBlur=dimBack?8:22;
+  ctx.globalAlpha=alpha;ctx.shadowBlur=dimBack?8:22;ctx.shadowColor=color;
   ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(lx,ly);ctx.lineTo(bx,by);ctx.lineTo(rx,ry);ctx.closePath();
   ctx.fillStyle=color;ctx.fill();
-  ctx.shadowBlur=0;ctx.globalAlpha=alpha*0.45;
-  ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(bx,by);ctx.lineTo(rx,ry);ctx.closePath();
-  ctx.fillStyle=dimBack?'#6a1515':'#7a5010';ctx.fill();
   ctx.restore();
 }
 
@@ -601,7 +578,7 @@ const Compass={
   _drag:false,
 
   init(){
-    const c=$('cCanvas');if(!c||c._init)return;c._init=true;
+    const c=$('cCanvas'); if(!c || c._init) return; c._init=true;
     const angle=e=>{
       const r=c.getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left-r.width/2,py=(e.touches?e.touches[0].clientY:e.clientY)-r.top-r.height/2;
       return (toD(Math.atan2(px,-py))+360)%360;
@@ -613,34 +590,30 @@ const Compass={
     ['mousemove','touchmove'].forEach(ev=>window.addEventListener(ev,e=>{
       if(!this._drag)return;this.targetBearing=angle(e);
     }));
-    ['mouseup','touchend','touchcancel'].forEach(ev=>window.addEventListener(ev,()=>this._drag=false));
-    // Auto-start device compass
-    Orient.requestAndStart((h,p)=>{
-      if(this.locked&&h!==null)this.targetBearing=h;
-      Tilt.onPitch(p);
-    });
+    ['mouseup','touchend'].forEach(ev=>window.addEventListener(ev,()=>this._drag=false));
+    Orient.requestAndStart();
   },
-
   toggleLock(){
     this.locked=!this.locked;this._lockUI();
-    showToast(this.locked?'Following phone direction':'Manual — drag the orange needle');
+    showToast(this.locked?'Following phone':'Manual — drag orange needle');
   },
-
   _lockUI(){
     const pill=$('compassPill'),text=$('compassPillText');
-    if(this.locked){pill.className='sensor-pill on';text.textContent='Following Phone';}
-    else{pill.className='sensor-pill';text.textContent='Manual (drag needle)';}
+    pill.className=this.locked?'sensor-pill on':'sensor-pill';
+    text.textContent=this.locked?'Following Phone':'Manual (drag needle)';
   },
-
-  draw(){drawCompassCanvas('cCanvas',Orient.heading,this.targetBearing);}
+  draw(){
+    if(this.locked && Orient.rawHeading !== null) this.targetBearing = Orient.rawHeading;
+    drawCompassCanvas('cCanvas', Orient.heading, this.targetBearing);
+    if(Orient.pitch !== null) Tilt.onPitch(Orient.pitch);
+  }
 };
 
-// ─── TILT / ALTITUDE ───
+// ─── TILT ───
 const Tilt={
   angle:0,fromSensor:false,_drag:false,
-
   init(){
-    const track=$('altTrack');if(!track||track._init)return;track._init=true;
+    const track=$('altTrack'); if(!track || track._init) return; track._init=true;
     const get=clientX=>{const r=track.getBoundingClientRect();return Math.round(Math.max(-90,Math.min(90,(Math.max(0,Math.min(1,(clientX-r.left)/r.width))-0.5)*180)));};
     ['mousedown','touchstart'].forEach(ev=>track.addEventListener(ev,e=>{
       if(this.fromSensor)return;this._drag=true;
@@ -652,355 +625,167 @@ const Tilt={
     ['mouseup','touchend'].forEach(ev=>window.addEventListener(ev,()=>this._drag=false));
     this._ui();
   },
-
   toggle(){
     this.fromSensor=!this.fromSensor;
-    const pill=$('tiltPill'),text=$('tiltPillText');
-    if(this.fromSensor){pill.className='sensor-pill on';text.textContent='Tilt ON — tilt phone';showToast('📐 Tilt phone forward/back to adjust vertical angle');}
-    else{pill.className='sensor-pill';text.textContent='Enable Tilt';showToast('Manual slider mode');}
+    $('tiltPill').className=this.fromSensor?'sensor-pill on':'sensor-pill';
+    $('tiltPillText').textContent=this.fromSensor?'Tilt ON':'Enable Tilt';
   },
-
   onPitch(p){if(!this.fromSensor||p===null)return;this.angle=Math.round(Math.max(-90,Math.min(90,p)));this._ui();},
-
   _ui(){
-    const thumb=$('altThumb'),fill=$('altFill'),label=$('altLabel'),track=$('altTrack');
-    if(!thumb||!track)return;
-    const W=track.offsetWidth||300,frac=(this.angle+90)/180,x=frac*W,cx=W/2;
-    thumb.style.left=x+'px';
-    if(x>=cx){fill.style.left=cx+'px';fill.style.width=(x-cx)+'px';}
-    else{fill.style.left=x+'px';fill.style.width=(cx-x)+'px';}
-    if(label)label.textContent=(this.angle>0?'+':'')+this.angle+'°';
+    const W=$('altTrack').offsetWidth||300,x=((this.angle+90)/180)*W;
+    $('altThumb').style.left=x+'px';
+    $('altFill').style.left=Math.min(x,W/2)+'px';
+    $('altFill').style.width=Math.abs(x-W/2)+'px';
+    $('altLabel').textContent=(this.angle>0?'+':'')+this.angle+'°';
   }
 };
 
-// ─── CREATOR MAP ───
+// ─── MAPS (Resize Fix) ───
 const CMap={
   map:null,marker:null,lat:null,lng:null,
   init(){
-    if(this.map){
-    setTimeout(()=>this.map.invalidateSize(), 80);
-    return;
-    }
-    if(this.map){setTimeout(()=>this.map.invalidateSize(),80);return;}
-    const center=GPS.lat?[GPS.lat,GPS.lng]:[20.5937,78.9629];
-    this.map=L.map('createMapEl',{zoomControl:true,attributionControl:false}).setView(center,GPS.lat?15:5);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(this.map);
-    if(GPS.lat){
-      const ic=L.divIcon({html:'<div style="width:12px;height:12px;background:#00d4aa;border-radius:50%;border:2.5px solid white;box-shadow:0 0 8px #00d4aa"></div>',iconSize:[12,12],iconAnchor:[6,6],className:''});
-      L.marker([GPS.lat,GPS.lng],{icon:ic}).addTo(this.map).bindPopup('You');
-    }
+    if(this.map) return;
+    this.map=L.map('createMapEl',{zoomControl:true,attributionControl:false}).setView([20,78],5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png').addTo(this.map);
     this.map.on('click',e=>{
-      const{lat,lng}=e.latlng;this.lat=lat;this.lng=lng;
+      this.lat=e.latlng.lat;this.lng=e.latlng.lng;
       if(this.marker)this.map.removeLayer(this.marker);
-      const ic=L.divIcon({html:'<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.8))">📍</div>',iconSize:[26,30],iconAnchor:[13,28],className:''});
-      this.marker=L.marker([lat,lng],{icon:ic}).addTo(this.map);
-      $('createMapHint').textContent='✓ Pin placed — tap again to move';
-      showToast(`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      this.marker=L.marker([this.lat,this.lng],{icon:L.divIcon({html:'📍',className:'',iconSize:[24,24]})}).addTo(this.map);
     });
-    setTimeout(()=>this.map.invalidateSize(),100);
+    // Fix: Force redraw on visibility
+    new ResizeObserver(()=>this.map.invalidateSize()).observe($('createMapEl'));
   },
-  
-  clear(){this.lat=null;this.lng=null;if(this.marker&&this.map){this.map.removeLayer(this.marker);this.marker=null;}$('createMapHint').textContent='👆 Tap map to place pin';}
-  new ResizeObserver(() => this.map.invalidateSize()).observe($('createMapEl'));
+  clear(){this.lat=null;this.lng=null;if(this.marker)this.map.removeLayer(this.marker);this.marker=null;}
 };
 
 // ─── NAVIGATE ───
 const Nav={
   session:null,pinIdx:0,map:null,
-  userMk:null,pinMks:[],
-  manLat:null,manLng:null,
-  tapMode:false,proxFired:{},
-  _loopId:null,
-
-  load(session){
-    this.session=session;this.pinIdx=0;this.manLat=null;this.manLng=null;this.proxFired={};
+  manLat:null,manLng:null,userMk:null,
+  load(s){
+    this.session=s;this.pinIdx=0;
     showPage('pgNav');
-    $('navTitle').textContent=session.name||'Navigate';
-    Orient.requestAndStart(()=>{});
-    this._renderSelector();this._renderList();this._initMap();
-    this.selectPin(0);this._startLoop();
+    this._renderSelector();
+    this._initMap();
+    this.selectPin(0);
+    this._loop();
   },
-
-  _startLoop(){
-    if(this._loopId)cancelAnimationFrame(this._loopId);
-    const loop=()=>{
-      if(!$('pgNav').classList.contains('active')){this._loopId=null;return;}
-      this._drawCompass();this._updateStats();
-      this._loopId=requestAnimationFrame(loop);
-    };
-    this._loopId=requestAnimationFrame(loop);
-  },
-
-  _getTarget(){
+  _loop(){
+    if(!$('pgNav').classList.contains('active')) return;
     const pin=this.session.pins[this.pinIdx];
-    const myLat=this.manLat??GPS.lat,myLng=this.manLng??GPS.lng;
-    let b=pin.bearing??0,dist=null;
-    if(pin.lat!==null&&myLat!==null){dist=haversine(myLat,myLng,pin.lat,pin.lng);b=calcBearing(myLat,myLng,pin.lat,pin.lng);}
-    return{b,dist,pin,myLat,myLng};
-  },
-
-  _drawCompass(){
-    if(!this.session)return;
-    const{b,dist}=this._getTarget();
-    drawCompassCanvas('nCanvas',Orient.heading,b,{centerText:dist!==null?fmtDist(dist):''});
-  },
-
-  _updateStats(){
-    if(!this.session)return;
-    const{b,dist}=this._getTarget();
-    $('nDist').textContent=dist!==null?fmtDist(dist):'—';
-    $('nBearing').textContent=Math.round(b)+'° '+card(b);
-    $('nETA').textContent=dist!==null?fmtETA(dist):'—';
-    if(dist!==null)this._checkProx(dist);
-  },
-
-  _checkProx(dist){
-    const pin=this.session.pins[this.pinIdx];
-    if(!pin.prox||this.proxFired[pin.id])return;
-    if(dist<=pin.prox){
-      this.proxFired[pin.id]=true;
-      const a=$('proxAlert');
-      a.textContent=`${CAT[pin.cat]} ${fmtDist(dist)} away! "${pin.msg.substring(0,30)}"`;
-      a.style.display='block';
-      if(navigator.vibrate)navigator.vibrate([200,100,300]);
-      setTimeout(()=>{a.style.display='none';delete this.proxFired[pin.id];},5000);
+    const myLat=this.manLat??GPS.lat, myLng=this.manLng??GPS.lng;
+    let b=pin.bearing||0, dist=null;
+    if(pin.lat && myLat){
+      dist=haversine(myLat,myLng,pin.lat,pin.lng);
+      b=calcBearing(myLat,myLng,pin.lat,pin.lng);
     }
+    drawCompassCanvas('nCanvas', Orient.heading, b, {centerText:dist?fmtDist(dist):''});
+    $('nDist').textContent=dist?fmtDist(dist):'—';
+    $('nBearing').textContent=Math.round(b)+'°';
+    requestAnimationFrame(()=>this._loop());
   },
-
   selectPin(i){
     this.pinIdx=i;
     document.querySelectorAll('.nav-pin-btn').forEach((b,j)=>b.classList.toggle('active',j===i));
-    const pin=this.session.pins[i];
-    $('nMsgText').textContent=pin.msg||'—';
-    const hasAlt=pin.alt&&pin.alt!==0;
-    $('nAltViewer').style.display=hasAlt?'flex':'none';
-    if(hasAlt){
-      $('nAltVal').textContent=(pin.alt>0?'+':'')+pin.alt+'°';
-      $('nAltDesc').textContent=pin.alt>0?'Tilt phone up to aim at target':pin.alt<0?'Tilt phone down to aim at target':'Hold phone level to aim at target';
-      this._drawAltArc(pin.alt);
-    }
-    this._centerMap();this._updateLocFix();
+    $('nMsgText').textContent=this.session.pins[i].msg;
   },
-
-  _drawAltArc(angle){
-    const c=$('nAltArc');if(!c)return;
-    const ctx=c.getContext('2d'),W=90,H=55,cx=W/2,cy=H-4,r=36;
-    ctx.clearRect(0,0,W,H);
-    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,0);ctx.strokeStyle='#1e2a40';ctx.lineWidth=4;ctx.stroke();
-    ctx.beginPath();ctx.moveTo(6,cy);ctx.lineTo(W-6,cy);ctx.strokeStyle='#2a3855';ctx.lineWidth=1;ctx.stroke();
-    const endA=Math.PI-toR(angle);
-    const [sa,ea,ccw]=[angle>=0?endA:Math.PI,angle>=0?Math.PI:endA,angle<0];
-    ctx.beginPath();ctx.arc(cx,cy,r,sa,ea,ccw);ctx.strokeStyle='#f5a623';ctx.lineWidth=4;ctx.stroke();
-    ctx.beginPath();ctx.arc(cx+Math.cos(endA)*r,cy+Math.sin(endA)*r,6,0,Math.PI*2);ctx.fillStyle='#f5a623';ctx.fill();
+  _initMap(){
+    if(this.map) this.map.remove();
+    this.map=L.map('navMapEl',{zoomControl:false,attributionControl:false}).setView([20,78],14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png').addTo(this.map);
+    new ResizeObserver(()=>this.map.invalidateSize()).observe($('navMapEl'));
   },
-
   _renderSelector(){
     $('navPinScroll').innerHTML=this.session.pins.map((p,i)=>
-      `<button class="nav-pin-btn${i===0?' active':''}" onclick="Nav.selectPin(${i})">${CAT[p.cat]} Pin ${i+1}</button>`
+      `<button class="nav-pin-btn" onclick="Nav.selectPin(${i})">${CAT[p.cat]} Pin ${i+1}</button>`
     ).join('');
   },
-
-  _renderList(){
-    $('navPinList').innerHTML=this.session.pins.map((p,i)=>_pinCard(p,i,false)).join('');
-  },
-
-  _initMap(){
-    if(this.map){this.map.remove();this.map=null;}this.pinMks=[];
-    const fp=this.session.pins.find(p=>p.lat!==null);
-    const center=fp?[fp.lat,fp.lng]:GPS.lat?[GPS.lat,GPS.lng]:[20.5937,78.9629];
-    this.map=L.map('navMapEl',{zoomControl:false,attributionControl:false}).setView(center,14);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(this.map);
-    this.session.pins.forEach((p,i)=>{
-      if(p.lat===null)return;
-      const col=CATCOL[p.cat]||'#f5a623';
-      const ic=L.divIcon({html:`<div style="background:${col};width:14px;height:14px;border-radius:50%;border:2.5px solid white;box-shadow:0 0 8px ${col}88"></div>`,iconSize:[14,14],iconAnchor:[7,7],className:''});
-      L.marker([p.lat,p.lng],{icon:ic}).addTo(this.map).bindPopup(`<b>${CAT[p.cat]} Pin ${i+1}</b><br>${p.msg}`);
-    });
-    this.map.on('click',e=>{
-      if(!this.tapMode)return;
-      this.manLat=e.latlng.lat;this.manLng=e.latlng.lng;
-      this.tapMode=false;$('nMapHint').style.display='none';$('navMapEl').style.outline='none';
-      this._updateUserMarker();this._updateLocFix();
-      showToast('📍 Your location set — compass updated!');
-    });
-    this._updateUserMarker();
-    setTimeout(()=>this.map.invalidateSize(),150);
-  },
-
-  _updateUserMarker(){
+  onGPS(){
     if(!this.map)return;
-    const lat=this.manLat??GPS.lat,lng=this.manLng??GPS.lng;
-    if(lat===null)return;
+    const lat=this.manLat??GPS.lat, lng=this.manLng??GPS.lng;
+    if(!lat)return;
     if(this.userMk)this.map.removeLayer(this.userMk);
-    const ic=L.divIcon({html:'<div style="width:16px;height:16px;background:#00d4aa;border-radius:50%;border:3px solid white;box-shadow:0 0 10px #00d4aa88"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''});
-    this.userMk=L.marker([lat,lng],{icon:ic,zIndexOffset:200}).addTo(this.map).bindPopup('You');
+    this.userMk=L.circleMarker([lat,lng],{radius:6,color:'#fff',fillColor:'#00d4aa',fillOpacity:1}).addTo(this.map);
   },
-
-  _centerMap(){
-    if(!this.map)return;
-    const pin=this.session.pins[this.pinIdx];
-    const myLat=this.manLat??GPS.lat,myLng=this.manLng??GPS.lng;
-    const pts=[];
-    if(pin.lat!==null)pts.push([pin.lat,pin.lng]);
-    if(myLat!==null)pts.push([myLat,myLng]);
-    if(pts.length>=2)this.map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});
-    else if(pts.length===1)this.map.setView(pts[0],15);
-    setTimeout(()=>this.map.invalidateSize(),100);
-  },
-
   enableManualTap(){
-    this.tapMode=true;$('nMapHint').style.display='block';$('navMapEl').style.outline='2px solid var(--gps)';
-    showToast('👆 Tap map to set your location');
-    $('navMapEl').scrollIntoView({behavior:'smooth',block:'center'});
-  },
-
-  onGPS(){this._updateUserMarker();this._updateLocFix();},
-
-  _updateLocFix(){
-    const ok=(GPS.lat!==null&&(GPS.acc||999)<150)||(this.manLat!==null);
-    $('gpsFixBox').style.display=ok?'none':'';
+    this.map.once('click',e=>{
+      this.manLat=e.latlng.lat;this.manLng=e.latlng.lng;
+      this.onGPS();showToast('Location set manually');
+    });
+    showToast('Tap on map');
   }
 };
 
 // ─── PIN CARD ───
 function _pinCard(p,i,del){
-  const b=p.bearing!==null?`<span class="chip t">${Math.round(p.bearing)}° ${card(p.bearing)}</span>`:'';
-  const d=p.dist?`<span class="chip">${fmtDist(p.dist)}</span>`:'';
-  const a=p.alt?`<span class="chip g">${p.alt>0?'+':''}${p.alt}°</span>`:'';
-  const pos=p.lat!==null?`<span class="chip">${p.lat.toFixed(4)},${p.lng.toFixed(4)}</span>`:`<span class="chip n">dir only</span>`;
   const btn=del?`<button class="pin-del" onclick="App.deletePin(${i})">✕</button>`:
     `<button class="pin-nav-btn" onclick="Nav.selectPin(${i})">▶</button>`;
   return `<div class="pin-card">
     <div class="pin-emoji">${CAT[p.cat]}</div>
     <div class="pin-info">
-      <div class="pin-cat" style="color:${CATCOL[p.cat]}">${p.cat.charAt(0).toUpperCase()+p.cat.slice(1)}</div>
+      <div class="pin-cat" style="color:${CATCOL[p.cat]}">${p.cat.toUpperCase()}</div>
       <div class="pin-msg">${p.msg}</div>
-      <div class="pin-chips">${b}${d}${a}${pos}</div>
+      <div class="pin-chips"><span class="chip">${p.lat?p.lat.toFixed(4):'Direction only'}</span></div>
     </div>${btn}
   </div>`;
 }
 
 // ─── APP ───
 const App={
-  session:null,pins:[],tab:'compass',cat:'meet',
-
+  pins:[],cat:'meet',
   goHome(){showPage('pgHome');},
-
-  goCreate(){
-    this.pins=[];this._renderPins();
-    showPage('pgCreate');
-    setTimeout(()=>{Compass.init();Tilt.init();},120);
-  },
-
+  goCreate(){this.pins=[];this._renderPins();showPage('pgCreate');setTimeout(()=>{Compass.init();Tilt.init();},100);},
   goJoin(){$('joinInput').value='';showPage('pgJoin');},
-
   setTab(t){
-    this.tab=t;
-    ['Compass','Map'].forEach(x=>{
-      const id='tab'+x,pid='panel'+x;
-      $(id)?.classList.toggle('active',x.toLowerCase()===t);
-      const el=$(pid);if(el)el.style.display=x.toLowerCase()===t?'':'none';
-    });
-    $('distFieldWrap').style.display=t==='compass'?'':'none';
-    if(t==='map')setTimeout(()=>CMap.init(),60);
+    $('tabCompass').classList.toggle('active',t==='compass');
+    $('tabMap').classList.toggle('active',t==='map');
+    $('panelCompass').style.display=t==='compass'?'':'none';
+    $('panelMap').style.display=t==='map'?'':'none';
+    if(t==='map') CMap.init();
   },
-
   setCat(el){
     this.cat=el.dataset.cat;
     document.querySelectorAll('.cat-pill').forEach(p=>p.classList.remove('active'));
     el.classList.add('active');
   },
-
   addPin(){
-    const msg=$('pinMsg').value.trim();
-    const exp=parseInt($('pinExpiry').value);
-    const prox=parseInt($('pinProx').value);
-    const alt=Tilt.angle;
-    let lat=null,lng=null,brg=null,dist=null;
-
-    if(this.tab==='compass'){
-      brg=Math.round(Compass.targetBearing);
-      const dv=parseFloat($('pinDist').value);
-      if(!isNaN(dv)&&dv>0){
-        if(GPS.lat===null){showToast('GPS needed to compute distance direction',true);return;}
-        const unit=$('pinUnit').value;
-        dist=unit==='m'?dv:unit==='km'?dv*1000:dv*1609.34;
-        const dp=destPoint(GPS.lat,GPS.lng,brg,dist);
-        lat=dp.lat;lng=dp.lng;
-      }
-    } else {
-      if(CMap.lat===null){showToast('Tap the map to place a pin first',true);return;}
-      lat=CMap.lat;lng=CMap.lng;
-      if(GPS.lat!==null)brg=Math.round(calcBearing(GPS.lat,GPS.lng,lat,lng));
-      CMap.clear();
+    let lat=CMap.lat, lng=CMap.lng, brg=Compass.targetBearing;
+    if(!lat && $('tabCompass').classList.contains('active') && GPS.lat){
+       const dv=parseFloat($('pinDist').value);
+       if(dv>0){
+         const dp=destPoint(GPS.lat,GPS.lng,brg,($('pinUnit').value==='m'?dv:dv*1000));
+         lat=dp.lat;lng=dp.lng;
+       }
     }
-
-    this.pins.push({id:Date.now().toString(36),lat,lng,bearing:brg,dist,alt,msg:msg||'No message',cat:this.cat,expiry:exp>0?Date.now()+exp*60000:0,prox});
-    $('pinMsg').value='';$('pinDist').value='';
-    this._renderPins();showToast(`${CAT[this.cat]} Pin added!`);
+    this.pins.push({lat,lng,bearing:brg,msg:$('pinMsg').value||'No message',cat:this.cat,id:Date.now()});
+    this._renderPins();showToast('Pin Added');
   },
-
   deletePin(i){this.pins.splice(i,1);this._renderPins();},
-
   _renderPins(){
-    const list=$('createPinList'),empty=$('createEmpty');
-    $('pinCountLabel').textContent=`(${this.pins.length})`;
-    if(!this.pins.length){list.innerHTML='';empty.style.display='';return;}
-    empty.style.display='none';
-    list.innerHTML=this.pins.map((p,i)=>_pinCard(p,i,true)).join('');
+    $('createPinList').innerHTML=this.pins.map((p,i)=>_pinCard(p,i,true)).join('');
+    $('createEmpty').style.display=this.pins.length?'none':'';
   },
-
   share(){
-    if(!this.pins.length){showToast('Add at least one pin first!',true);return;}
-    const name=prompt('Session name (e.g. "Party at Raj\'s"):','My Session')||'My Session';
-    this.session={name,pins:this.pins,created:Date.now(),creatorLat:GPS.lat,creatorLng:GPS.lng};
-    const code=enc(this.session);
-    const url=location.origin+location.pathname+'#'+code;
+    const sess={pins:this.pins,name:'My Session'};
+    const url=location.origin+location.pathname+'#'+enc(sess);
     $('shareUrl').textContent=url;$('shareUrl').dataset.url=url;
-    $('sharePinList').innerHTML=this.pins.map((p,i)=>_pinCard(p,i,false)).join('');
     showPage('pgShare');
   },
-
-  copyLink(){
-    const url=$('shareUrl').dataset.url;
-    navigator.clipboard.writeText(url).then(()=>showToast('Link copied!')).catch(()=>prompt('Copy:',url));
-  },
-
-  nativeShare(){
-    const url=$('shareUrl').dataset.url;
-    if(navigator.share)navigator.share({title:'PointMe',text:'Navigate with me!',url});
-    else this.copyLink();
-  },
-
-  openNav(){if(this.session)Nav.load(this.session);},
-
-  join(){
-    let raw=$('joinInput').value.trim();
-    const h=raw.indexOf('#');if(h!==-1)raw=raw.substring(h+1);
-    const sess=dec(raw);
-    if(!sess||!Array.isArray(sess.pins)){showToast('Invalid code or link',true);return;}
-    Nav.load(sess);
-  }
+  copyLink(){navigator.clipboard.writeText($('shareUrl').dataset.url);showToast('Copied!');},
+  openNav(){Nav.load(dec(location.hash.slice(1)));},
+  join(){const h=$('joinInput').value.split('#')[1]; if(h) Nav.load(dec(h));}
 };
 
-// ─── RENDER LOOP (creator) ───
+// ─── MASTER LOOP ───
 (function loop(){
-  if($('pgCreate').classList.contains('active'))Compass.draw();
+  if($('pgCreate').classList.contains('active')) Compass.draw();
   requestAnimationFrame(loop);
 })();
 
-// ─── INIT ───
-window.addEventListener('load',()=>{
+window.onload=()=>{
   GPS.start();
-  const hash=location.hash.slice(1);
-  if(hash.length>20){const s=dec(hash);if(s&&Array.isArray(s.pins)){setTimeout(()=>Nav.load(s),300);return;}}
-});
-
-window.addEventListener('resize',()=>{
-  if(Nav.map)Nav.map.invalidateSize();
-  if(CMap.map)CMap.map.invalidateSize();
-  Tilt._ui();
-});
+  if(location.hash.length>20) Nav.load(dec(location.hash.slice(1)));
+};
 </script>
 </body>
 </html>
