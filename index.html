@@ -1,1652 +1,733 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>PointMe — Share Directions</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+import { useState, useEffect, useRef } from "react";
 
-<style>
-  :root {
-    --bg: #080c14;
-    --surface: #0d1520;
-    --surface2: #131e2e;
-    --border: #1e3048;
-    --accent: #00d4ff;
-    --accent2: #ff6b35;
-    --accent3: #39ff14;
-    --text: #e8f4f8;
-    --muted: #4a7a99;
-    --meet: #39ff14;
-    --look: #00d4ff;
-    --caution: #ffcc00;
-    --party: #ff6b35;
-  }
+// ── Geo Utils ──────────────────────────────────────────────────
+function generateCode() {
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let a = "", b = "";
+  for (let i = 0; i < 4; i++) { a += c[~~(Math.random() * c.length)]; b += c[~~(Math.random() * c.length)]; }
+  return a + "-" + b;
+}
+function haverDist(a, b, c, d) {
+  const R = 6371000, p1 = a * Math.PI / 180, p2 = c * Math.PI / 180;
+  const dp = (c - a) * Math.PI / 180, dl = (d - b) * Math.PI / 180;
+  const x = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+function calcBear(a, b, c, d) {
+  const dl = (d - b) * Math.PI / 180, p1 = a * Math.PI / 180, p2 = c * Math.PI / 180;
+  return (Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) * 180 / Math.PI + 360) % 360;
+}
+function destPt(lat, lon, brng, d) {
+  const R = 6371000, δ = d / R, θ = brng * Math.PI / 180, p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+  const p2 = Math.asin(Math.sin(p1) * Math.cos(δ) + Math.cos(p1) * Math.sin(δ) * Math.cos(θ));
+  const l2 = l1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(p1), Math.cos(δ) - Math.sin(p1) * Math.sin(p2));
+  return [p2 * 180 / Math.PI, l2 * 180 / Math.PI];
+}
+function fmtDist(m) { return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`; }
+function cardDir(b) { return ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(b / 22.5) % 16]; }
+function fmtTime(ms) {
+  const h = ms / 3600000;
+  if (h > 48) return `${Math.floor(h / 24)}d`;
+  if (h > 1) return `${Math.floor(h)}h`;
+  return `${Math.round(h * 60)}m`;
+}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+// ── Constants ─────────────────────────────────────────────────
+const CATS = [
+  { e: "📍", l: "General", c: "#f5a623" }, { e: "🎉", l: "Party", c: "#ff6bbd" },
+  { e: "🍕", l: "Food", c: "#ff8c42" },    { e: "⚠️", l: "Alert", c: "#ff4466" },
+  { e: "💎", l: "Treasure", c: "#7fdbff" }, { e: "🏠", l: "Home", c: "#77dd77" },
+  { e: "🚗", l: "Meet Up", c: "#aab8ff" }, { e: "🎯", l: "Target", c: "#ffdd44" },
+];
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Grid noise texture */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .app { position: relative; z-index: 1; }
-
-  /* ── HEADER ── */
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(8,12,20,0.9);
-    backdrop-filter: blur(12px);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-
-  .logo {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: -1px;
-  }
-  .logo span { color: var(--accent2); }
-
-  .status-dot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    display: inline-block;
-    margin-right: 6px;
-    animation: pulse 2s infinite;
-  }
-  .status-dot.active { background: var(--accent3); }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-
-  /* ── VIEWS ── */
-  .view { display: none; padding: 20px; max-width: 480px; margin: 0 auto; }
-  .view.active { display: block; }
-
-  /* ── HOME ── */
-  .hero {
-    text-align: center;
-    padding: 40px 0 30px;
-  }
-
-  .compass-ring {
-    width: 120px; height: 120px;
-    margin: 0 auto 24px;
-    position: relative;
-  }
-
-  .compass-ring svg { width: 100%; height: 100%; }
-
-  @keyframes rotate-ring { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .ring-outer { animation: rotate-ring 20s linear infinite; transform-origin: center; }
-
-  .hero h1 { font-size: 2rem; font-weight: 800; line-height: 1.1; margin-bottom: 8px; }
-  .hero h1 em { color: var(--accent); font-style: normal; }
-  .hero p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
-
-  .btn-group { display: flex; flex-direction: column; gap: 12px; margin-top: 30px; }
-
-  .btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 14px 24px;
-    border-radius: 8px;
-    border: none;
-    cursor: pointer;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    transition: all 0.15s;
-    text-transform: uppercase;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: var(--bg);
-  }
-  .btn-primary:hover { background: #33ddff; transform: translateY(-1px); }
-
-  .btn-secondary {
-    background: transparent;
-    color: var(--accent);
-    border: 1.5px solid var(--accent);
-  }
-  .btn-secondary:hover { background: rgba(0,212,255,0.1); }
-
-  .btn-orange {
-    background: var(--accent2);
-    color: white;
-  }
-  .btn-orange:hover { background: #ff8355; transform: translateY(-1px); }
-
-  .btn-ghost {
-    background: var(--surface2);
-    color: var(--muted);
-    border: 1px solid var(--border);
-  }
-  .btn-ghost:hover { border-color: var(--muted); color: var(--text); }
-
-  .btn-sm { padding: 8px 16px; font-size: 0.75rem; }
-
-  /* ── FORMS ── */
-  .section-title {
-    font-size: 0.7rem;
-    font-family: 'Space Mono', monospace;
-    letter-spacing: 3px;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .section-title::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-  }
-
-  .field { margin-bottom: 16px; }
-  .field label {
-    display: block;
-    font-size: 0.75rem;
-    font-family: 'Space Mono', monospace;
-    color: var(--muted);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-
-  .field input, .field textarea, .field select {
-    width: 100%;
-    background: var(--surface2);
-    border: 1.5px solid var(--border);
-    color: var(--text);
-    padding: 12px 14px;
-    border-radius: 8px;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.9rem;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .field input:focus, .field textarea:focus, .field select:focus {
-    border-color: var(--accent);
-  }
-  .field textarea { resize: none; height: 80px; }
-  .field select option { background: var(--bg); }
-
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-  /* ── COMPASS SELECTOR ── */
-  .compass-selector {
-    background: var(--surface2);
-    border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-    margin-bottom: 16px;
-  }
-
-  .compass-dial {
-    width: 160px; height: 160px;
-    margin: 0 auto 16px;
-    position: relative;
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .compass-dial canvas { position: absolute; top: 0; left: 0; }
-
-  .compass-value {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.8rem;
-    font-weight: 700;
-    color: var(--accent);
-  }
-  .compass-label {
-    font-size: 0.75rem;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  .use-device-btn {
-    margin-top: 12px;
-    padding: 8px 20px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    border-radius: 6px;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-transform: uppercase;
-  }
-  .use-device-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .use-device-btn.active { border-color: var(--accent3); color: var(--accent3); }
-
-  /* ── PIN CARD ── */
-  .pin-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 12px;
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-    position: relative;
-    transition: border-color 0.2s;
-  }
-  .pin-card:hover { border-color: var(--muted); }
-
-  .pin-icon {
-    width: 44px; height: 44px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-    flex-shrink: 0;
-  }
-  .pin-icon.meet { background: rgba(57,255,20,0.15); }
-  .pin-icon.look { background: rgba(0,212,255,0.15); }
-  .pin-icon.caution { background: rgba(255,204,0,0.15); }
-  .pin-icon.party { background: rgba(255,107,53,0.15); }
-
-  .pin-info { flex: 1; min-width: 0; }
-  .pin-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
-  .pin-msg { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pin-meta { display: flex; gap: 10px; flex-wrap: wrap; }
-  .pin-badge {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.65rem;
-    padding: 2px 8px;
-    border-radius: 4px;
-    background: var(--surface2);
-    color: var(--muted);
-  }
-  .pin-badge.bearing { color: var(--accent); }
-  .pin-badge.dist { color: var(--accent2); }
-
-  .pin-actions { display: flex; flex-direction: column; gap: 6px; }
-
-  .del-btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    width: 32px; height: 32px;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.8rem;
-    transition: all 0.15s;
-  }
-  .del-btn:hover { border-color: #ff4444; color: #ff4444; }
-
-  .nav-btn {
-    background: rgba(0,212,255,0.1);
-    border: 1px solid rgba(0,212,255,0.3);
-    color: var(--accent);
-    width: 32px; height: 32px;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.8rem;
-    transition: all 0.15s;
-  }
-  .nav-btn:hover { background: rgba(0,212,255,0.2); }
-
-  /* ── SESSION CODE ── */
-  .code-box {
-    background: var(--surface2);
-    border: 1.5px solid var(--accent);
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-    margin: 20px 0;
-  }
-  .code-label { font-size: 0.7rem; font-family: 'Space Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
-  .code-value {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.6rem;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 6px;
-    margin-bottom: 12px;
-    word-break: break-all;
-    font-size: 1rem;
-  }
-
-  /* ── NAVIGATE VIEW ── */
-  .nav-compass {
-    width: 220px; height: 220px;
-    margin: 0 auto 24px;
-    position: relative;
-  }
-  .nav-compass canvas { position: absolute; top: 0; left: 0; }
-
-  .nav-info {
-    text-align: center;
-    margin-bottom: 24px;
-  }
-  .nav-distance { font-family: 'Space Mono', monospace; font-size: 2rem; color: var(--accent); font-weight: 700; }
-  .nav-bearing { font-family: 'Space Mono', monospace; font-size: 1rem; color: var(--accent2); margin-top: 4px; }
-  .nav-msg { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
-
-  /* ── MAP ── */
-  #mapContainer {
-    height: 320px;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1.5px solid var(--border);
-    margin-bottom: 16px;
-  }
-
-  /* ── TAB BAR ── */
-  .tab-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    background: rgba(8,12,20,0.97);
-    border-top: 1px solid var(--border);
-    display: flex;
-    z-index: 200;
-    padding-bottom: env(safe-area-inset-bottom);
-    backdrop-filter: blur(12px);
-  }
-
-  .tab-btn {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 10px 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--muted);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    transition: color 0.15s;
-  }
-  .tab-btn .tab-icon { font-size: 1.2rem; }
-  .tab-btn.active { color: var(--accent); }
-
-  /* ── JOIN ── */
-  .join-code-input {
-    background: var(--surface2);
-    border: 2px solid var(--border);
-    color: var(--accent);
-    padding: 16px;
-    border-radius: 10px;
-    font-family: 'Space Mono', monospace;
-    font-size: 1.2rem;
-    text-align: center;
-    width: 100%;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    outline: none;
-    transition: border-color 0.2s;
-    margin-bottom: 16px;
-  }
-  .join-code-input:focus { border-color: var(--accent); }
-
-  /* ── TOAST ── */
-  .toast {
-    position: fixed;
-    top: 70px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-20px);
-    background: var(--surface2);
-    border: 1px solid var(--accent);
-    color: var(--text);
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.8rem;
-    z-index: 1000;
-    opacity: 0;
-    transition: all 0.3s;
-    white-space: nowrap;
-    pointer-events: none;
-  }
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-
-  /* ── PIN LIST with scroll ── */
-  .pin-list { padding-bottom: 80px; }
-
-  .empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 2;
-  }
-  .empty-state .big { font-size: 3rem; display: block; margin-bottom: 12px; }
-
-  /* ── PROXIMITY BADGE ── */
-  .prox-badge {
-    position: fixed;
-    bottom: 70px;
-    right: 16px;
-    background: var(--accent3);
-    color: var(--bg);
-    border-radius: 20px;
-    padding: 8px 16px;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.75rem;
-    font-weight: 700;
-    z-index: 150;
-    display: none;
-    animation: bounce 0.5s ease;
-  }
-  @keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
-  }
-
-  /* ── INPUT TOGGLE ── */
-  .toggle-group { display: flex; background: var(--surface2); border-radius: 8px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--border); }
-  .toggle-opt {
-    flex: 1;
-    padding: 8px;
-    text-align: center;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.75rem;
-    cursor: pointer;
-    border-radius: 6px;
-    transition: all 0.2s;
-    color: var(--muted);
-    border: none;
-    background: none;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-  .toggle-opt.active {
-    background: var(--accent);
-    color: var(--bg);
-    font-weight: 700;
-  }
-
-  /* ── BACK BTN ── */
-  .back-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 0;
-    margin-bottom: 20px;
-    transition: color 0.15s;
-  }
-  .back-btn:hover { color: var(--text); }
-
-  .gps-accuracy {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    padding: 8px 12px;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .gps-good { background: rgba(57,255,20,0.1); border: 1px solid rgba(57,255,20,0.3); color: var(--accent3); }
-  .gps-ok { background: rgba(255,204,0,0.1); border: 1px solid rgba(255,204,0,0.3); color: var(--caution); }
-  .gps-bad { background: rgba(255,68,68,0.1); border: 1px solid rgba(255,68,68,0.3); color: #ff4444; }
-
-  .features-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin: 20px 0;
-  }
-  .feat-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 12px;
-    text-align: center;
-  }
-  .feat-card .feat-icon { font-size: 1.6rem; display: block; margin-bottom: 6px; }
-  .feat-card .feat-title { font-size: 0.75rem; font-weight: 600; margin-bottom: 3px; }
-  .feat-card .feat-desc { font-size: 0.65rem; color: var(--muted); line-height: 1.5; }
-
-  .session-header {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-  }
-  .session-name { font-weight: 700; font-size: 1rem; }
-  .session-code { font-family: 'Space Mono', monospace; font-size: 0.7rem; color: var(--accent); background: rgba(0,212,255,0.1); padding: 4px 10px; border-radius: 4px; cursor: pointer; }
-
-  .add-pin-fab {
-    position: fixed;
-    bottom: 80px;
-    right: 20px;
-    width: 52px; height: 52px;
-    background: var(--accent2);
-    border: none;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    cursor: pointer;
-    box-shadow: 0 4px 20px rgba(255,107,53,0.4);
-    transition: all 0.2s;
-    z-index: 150;
-    color: white;
-    font-family: 'Space Mono', monospace;
-  }
-  .add-pin-fab:hover { transform: scale(1.08); }
-
-  /* PIN CATEGORY colors */
-  .cat-meet { color: var(--meet); }
-  .cat-look { color: var(--look); }
-  .cat-caution { color: var(--caution); }
-  .cat-party { color: var(--party); }
-
-  /* scrollbar */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-  .section-divider { height: 1px; background: var(--border); margin: 24px 0; }
-
-  /* compass needle anim */
-  @keyframes needlePulse {
-    0%, 100% { filter: drop-shadow(0 0 4px var(--accent)); }
-    50% { filter: drop-shadow(0 0 12px var(--accent)); }
-  }
-</style>
-</head>
-<body>
-<div class="app">
-  <!-- TOAST -->
-  <div class="toast" id="toast"></div>
-  <div class="prox-badge" id="proxBadge">📍 You're nearby!</div>
-
-  <!-- HEADER -->
-  <header>
-    <div class="logo">Point<span>Me</span></div>
-    <div style="font-size:0.7rem; font-family:'Space Mono',monospace; color: var(--muted);">
-      <span class="status-dot" id="gpsStatusDot"></span>
-      <span id="gpsStatusText">No GPS</span>
+// ── Compass SVG ────────────────────────────────────────────────
+function CompassRose({ bearing, size = 200, showCardinals = true, label = null }) {
+  const needleAngle = bearing ?? 0;
+  return (
+    <div style={{ position: "relative", width: size, height: size, filter: "drop-shadow(0 0 18px rgba(212,136,42,0.35))" }}>
+      <svg width={size} height={size} viewBox="0 0 200 200">
+        {/* Rings */}
+        {[98, 88, 70].map((r, i) => (
+          <circle key={i} cx="100" cy="100" r={r}
+            fill="none" stroke={i === 0 ? "rgba(212,136,42,0.5)" : i === 1 ? "rgba(212,136,42,0.2)" : "rgba(212,136,42,0.1)"}
+            strokeWidth={i === 0 ? 1.5 : 1} />
+        ))}
+        {/* Tick marks */}
+        {Array.from({ length: 72 }).map((_, i) => {
+          const angle = i * 5, rad = angle * Math.PI / 180;
+          const isMajor = angle % 90 === 0, isMed = angle % 45 === 0, isSm = angle % 15 === 0;
+          const r1 = 98, r2 = isMajor ? 82 : isMed ? 86 : isSm ? 89 : 93;
+          return (
+            <line key={i}
+              x1={100 + r1 * Math.sin(rad)} y1={100 - r1 * Math.cos(rad)}
+              x2={100 + r2 * Math.sin(rad)} y2={100 - r2 * Math.cos(rad)}
+              stroke={isMajor ? "rgba(212,136,42,0.8)" : "rgba(212,136,42,0.3)"}
+              strokeWidth={isMajor ? 1.5 : 0.8} />
+          );
+        })}
+        {/* Cardinal labels */}
+        {showCardinals && [["N", 0], ["E", 90], ["S", 180], ["W", 270]].map(([l, a]) => {
+          const rad = a * Math.PI / 180, r = 75;
+          return <text key={l} x={100 + r * Math.sin(rad)} y={100 - r * Math.cos(rad) + 4.5}
+            textAnchor="middle" fill={l === "N" ? "#f5a623" : "rgba(212,136,42,0.6)"}
+            fontSize="11" fontFamily="'Orbitron',monospace" fontWeight="700">{l}</text>;
+        })}
+        {/* Center dot */}
+        <circle cx="100" cy="100" r="5" fill="#f5a623" opacity="0.9" />
+        <circle cx="100" cy="100" r="2.5" fill="#fff" />
+        {/* Needle */}
+        <g transform={`rotate(${needleAngle} 100 100)`}>
+          <polygon points="100,18 95,100 100,108 105,100" fill="#f5a623" opacity="0.95" />
+          <polygon points="100,108 95,100 100,185 105,100" fill="#3a4a5a" />
+          <polygon points="100,18 95,100 100,108 105,100" fill="none" stroke="rgba(255,220,150,0.5)" strokeWidth="0.5" />
+        </g>
+      </svg>
+      {label && (
+        <div style={{ position: "absolute", bottom: -28, width: "100%", textAlign: "center",
+          fontFamily: "'Orbitron',monospace", fontSize: 11, color: "#f5a623", letterSpacing: 2 }}>
+          {label}
+        </div>
+      )}
     </div>
-  </header>
+  );
+}
 
-  <!-- HOME VIEW -->
-  <div class="view active" id="viewHome">
-    <div class="hero">
-      <div class="compass-ring">
-        <svg viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="58" fill="none" stroke="#1e3048" stroke-width="1.5"/>
-          <g class="ring-outer">
-            <circle cx="60" cy="60" r="50" fill="none" stroke="#00d4ff" stroke-width="1" stroke-dasharray="4 8" opacity="0.6"/>
-            <polygon points="60,6 63,15 57,15" fill="#00d4ff" opacity="0.8"/>
+// ── Navigation Arrow ──────────────────────────────────────────
+function NavArrow({ angle, size = 220 }) {
+  const hasAngle = angle != null;
+  return (
+    <div style={{ position: "relative", width: size, height: size }}>
+      {/* Outer ring glow */}
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(245,166,35,0.08) 0%, transparent 70%)",
+        border: "1px solid rgba(245,166,35,0.25)",
+        animation: hasAngle ? "pulse 2s ease-in-out infinite" : "none"
+      }} />
+      <svg width={size} height={size} viewBox="0 0 220 220" style={{ filter: "drop-shadow(0 0 12px rgba(245,166,35,0.5))" }}>
+        {/* Rings */}
+        <circle cx="110" cy="110" r="105" fill="rgba(8,12,18,0.6)" stroke="rgba(245,166,35,0.3)" strokeWidth="1" />
+        <circle cx="110" cy="110" r="80" fill="none" stroke="rgba(245,166,35,0.1)" strokeWidth="1" strokeDasharray="4 8" />
+        {/* Cardinal dots */}
+        {[0, 90, 180, 270].map(a => {
+          const rad = a * Math.PI / 180;
+          return <circle key={a} cx={110 + 95 * Math.sin(rad)} cy={110 - 95 * Math.cos(rad)} r="3"
+            fill={a === 0 ? "#f5a623" : "rgba(245,166,35,0.3)"} />;
+        })}
+        {/* N label */}
+        <text x="110" y="7" textAnchor="middle" fill="#f5a623" fontSize="10" fontFamily="'Orbitron',monospace">N</text>
+        {/* Arrow */}
+        {hasAngle ? (
+          <g transform={`rotate(${angle} 110 110)`}>
+            <polygon points="110,22 103,110 110,124 117,110" fill="#f5a623" />
+            <polygon points="110,124 103,110 110,200 117,110" fill="rgba(200,150,50,0.3)" />
+            <circle cx="110" cy="110" r="7" fill="#f5a623" />
+            <circle cx="110" cy="110" r="3.5" fill="#fff" />
           </g>
-          <line x1="60" y1="20" x2="60" y2="45" stroke="#ff6b35" stroke-width="3" stroke-linecap="round"/>
-          <line x1="60" y1="75" x2="60" y2="100" stroke="#1e3048" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="60" cy="60" r="8" fill="#0d1520" stroke="#00d4ff" stroke-width="1.5"/>
-          <circle cx="60" cy="60" r="3" fill="#00d4ff"/>
-          <text x="60" y="18" text-anchor="middle" fill="#00d4ff" font-size="8" font-family="Space Mono">N</text>
-          <text x="60" y="108" text-anchor="middle" fill="#4a7a99" font-size="8" font-family="Space Mono">S</text>
-          <text x="108" y="63" text-anchor="middle" fill="#4a7a99" font-size="8" font-family="Space Mono">E</text>
-          <text x="12" y="63" text-anchor="middle" fill="#4a7a99" font-size="8" font-family="Space Mono">W</text>
-        </svg>
-      </div>
-      <h1>Share <em>direction</em><br>with anyone</h1>
-      <p>Point your phone, set a distance,<br>drop a message. Your friends navigate from <em>their</em> location.</p>
+        ) : (
+          <>
+            <circle cx="110" cy="110" r="10" fill="rgba(245,166,35,0.15)" stroke="rgba(245,166,35,0.4)" strokeWidth="1" />
+            <text x="110" y="115" textAnchor="middle" fill="rgba(245,166,35,0.5)" fontSize="9" fontFamily="'Orbitron',monospace">?</text>
+          </>
+        )}
+      </svg>
     </div>
-
-    <div class="features-grid">
-      <div class="feat-card">
-        <span class="feat-icon">🧭</span>
-        <div class="feat-title">Compass Pin</div>
-        <div class="feat-desc">Point direction + set distance</div>
-      </div>
-      <div class="feat-card">
-        <span class="feat-icon">📍</span>
-        <div class="feat-title">GPS Pin</div>
-        <div class="feat-desc">Drop exact location</div>
-      </div>
-      <div class="feat-card">
-        <span class="feat-icon">🔗</span>
-        <div class="feat-title">Share Code</div>
-        <div class="feat-desc">One URL, everyone navigates</div>
-      </div>
-      <div class="feat-card">
-        <span class="feat-icon">🔔</span>
-        <div class="feat-title">Proximity Alert</div>
-        <div class="feat-desc">Buzz when you're close</div>
-      </div>
-    </div>
-
-    <div class="btn-group">
-      <button class="btn btn-primary" onclick="startCreate()">🧭 Create a Session</button>
-      <button class="btn btn-secondary" onclick="showJoin()">🔗 Join with Code</button>
-    </div>
-  </div>
-
-  <!-- CREATE SESSION VIEW -->
-  <div class="view" id="viewCreate">
-    <button class="back-btn" onclick="showView('viewHome')">← Back</button>
-    <div class="section-title">New Session</div>
-
-    <div class="field">
-      <label>Session Name</label>
-      <input type="text" id="sessionName" placeholder="e.g. Party at Raj's, Festival Camp…" maxlength="40">
-    </div>
-
-    <div class="section-title">Add Pins</div>
-    <div class="toggle-group">
-      <button class="toggle-opt active" id="toggleCompass" onclick="setPinMode('compass')">🧭 Compass</button>
-      <button class="toggle-opt" id="toggleGps" onclick="setPinMode('gps')">📍 GPS Drop</button>
-      <button class="toggle-opt" id="toggleAddr" onclick="setPinMode('addr')">🏠 Address</button>
-    </div>
-
-    <!-- COMPASS MODE -->
-    <div id="modeCompass">
-      <div id="gpsAccuracy"></div>
-      <div class="compass-selector">
-        <canvas id="compassDial" width="160" height="160" style="cursor:crosshair"></canvas>
-        <div class="compass-value" id="compassDeg">000°</div>
-        <div class="compass-label" id="compassDir">North</div>
-        <button class="use-device-btn" id="deviceCompassBtn" onclick="toggleDeviceCompass()">📱 Use Device Compass</button>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Distance</label>
-          <input type="number" id="pinDist" placeholder="50" min="1" max="50000" value="100">
-        </div>
-        <div class="field">
-          <label>Unit</label>
-          <select id="pinUnit">
-            <option value="m">Metres</option>
-            <option value="km">Km</option>
-            <option value="mi">Miles</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- GPS MODE -->
-    <div id="modeGps" style="display:none">
-      <div id="gpsAccuracy2"></div>
-      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;margin-bottom:16px;">
-        <div style="font-size:0.75rem;color:var(--muted);font-family:'Space Mono',monospace;margin-bottom:8px;">CURRENT LOCATION</div>
-        <div id="gpsCoords" style="font-family:'Space Mono',monospace;font-size:0.85rem;color:var(--accent);">Acquiring…</div>
-        <button class="use-device-btn" style="margin-top:10px" onclick="refreshGps()">🔄 Refresh GPS</button>
-      </div>
-    </div>
-
-    <!-- ADDRESS MODE -->
-    <div id="modeAddr" style="display:none">
-      <div class="field">
-        <label>Lat, Lng (e.g. 28.6139, 77.2090)</label>
-        <input type="text" id="manualCoords" placeholder="28.6139, 77.2090">
-      </div>
-      <p style="font-size:0.75rem;color:var(--muted);margin-bottom:16px;">Tip: Long-press on Google Maps → copy coordinates. Or use when GPS signal is poor indoors.</p>
-    </div>
-
-    <!-- COMMON FIELDS -->
-    <div class="field">
-      <label>Category</label>
-      <select id="pinCategory">
-        <option value="meet">📍 Meet Here</option>
-        <option value="look">👁 Look Here</option>
-        <option value="caution">⚠️ Caution</option>
-        <option value="party">🎉 Party / Event</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label>Message</label>
-      <textarea id="pinMsg" placeholder="e.g. I'm standing at the blue gate, call when near…"></textarea>
-    </div>
-
-    <div class="field-row">
-      <div class="field">
-        <label>Expiry</label>
-        <select id="pinExpiry">
-          <option value="0">Never</option>
-          <option value="60">1 hour</option>
-          <option value="180">3 hours</option>
-          <option value="720">12 hours</option>
-          <option value="1440">24 hours</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Prox. Alert</label>
-        <select id="pinProx">
-          <option value="0">Off</option>
-          <option value="50">50m</option>
-          <option value="100" selected>100m</option>
-          <option value="250">250m</option>
-          <option value="500">500m</option>
-        </select>
-      </div>
-    </div>
-
-    <button class="btn btn-orange" style="width:100%;margin-bottom:12px" onclick="addPin()">＋ Add Pin</button>
-
-    <div class="section-title">Pins in Session</div>
-    <div class="pin-list" id="createPinList"><div class="empty-state"><span class="big">🗺️</span>No pins yet. Add one above!</div></div>
-
-    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="finalizeSession()">✓ Create & Share Session →</button>
-  </div>
-
-  <!-- SESSION CREATED VIEW -->
-  <div class="view" id="viewShare">
-    <button class="back-btn" onclick="showView('viewHome')">← Home</button>
-    <div class="section-title">Session Ready</div>
-
-    <div class="code-box">
-      <div class="code-label">Share this link with friends</div>
-      <div class="code-value" id="shareCode">—</div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button class="btn btn-secondary btn-sm" onclick="copyLink()">📋 Copy Link</button>
-        <button class="btn btn-ghost btn-sm" onclick="copyCode()">🔑 Copy Code Only</button>
-      </div>
-    </div>
-
-    <div style="font-size:0.8rem;color:var(--muted);text-align:center;margin-bottom:20px;line-height:1.6;">
-      Friends open this link → they see directions from <em>their</em> GPS location to each pin.
-    </div>
-
-    <div class="section-title">Pins</div>
-    <div id="sharePinList"></div>
-
-    <button class="btn btn-primary" style="width:100%;margin-top:16px" onclick="navigateSession(currentSession)">🧭 Navigate This Session</button>
-  </div>
-
-  <!-- JOIN VIEW -->
-  <div class="view" id="viewJoin">
-    <button class="back-btn" onclick="showView('viewHome')">← Back</button>
-    <div class="section-title">Join Session</div>
-
-    <p style="font-size:0.85rem;color:var(--muted);margin-bottom:20px;line-height:1.6;">Enter the code shared by your friend, or open their link directly.</p>
-
-    <input class="join-code-input" type="text" id="joinCodeInput" placeholder="PASTE CODE HERE" oninput="this.value=this.value.toUpperCase()">
-
-    <button class="btn btn-primary" style="width:100%" onclick="joinSession()">🔗 Join Session</button>
-  </div>
-
-  <!-- NAVIGATE VIEW -->
-  <div class="view" id="viewNavigate">
-    <button class="back-btn" id="navBackBtn" onclick="showView('viewHome')">← Back</button>
-
-    <div id="sessionHeaderNav"></div>
-
-    <div id="navPinSelector" style="margin-bottom:16px"></div>
-
-    <div class="nav-compass" id="navCompassWrap">
-      <canvas id="navCanvas" width="220" height="220"></canvas>
-    </div>
-
-    <div class="nav-info">
-      <div class="nav-distance" id="navDistance">—</div>
-      <div class="nav-bearing" id="navBearing">Bearing —</div>
-      <div class="nav-msg" id="navMsg">—</div>
-    </div>
-
-    <div id="mapContainer"></div>
-
-    <div class="section-title">All Pins</div>
-    <div id="navAllPins"></div>
-  </div>
-
-</div>
-
-<!-- FAB -->
-<button class="add-pin-fab" id="addPinFab" style="display:none" onclick="showView('viewCreate')">＋</button>
-
-<!-- TAB BAR -->
-<div class="tab-bar" id="tabBar" style="display:none">
-  <button class="tab-btn" onclick="showView('viewNavigate')" id="tabNav">
-    <span class="tab-icon">🧭</span>Navigate
-  </button>
-  <button class="tab-btn" onclick="showView('viewShare')" id="tabShare">
-    <span class="tab-icon">🔗</span>Share
-  </button>
-  <button class="tab-btn" onclick="showView('viewHome')" id="tabHome">
-    <span class="tab-icon">🏠</span>Home
-  </button>
-</div>
-
-<script>
-// ──────────────────────────────────────────────
-// STATE
-// ──────────────────────────────────────────────
-let myLat = null, myLng = null, gpsAccuracy = null;
-let deviceHeading = null;
-let usingDeviceCompass = false;
-let compassAngle = 0;
-let currentSession = null;
-let navPinIndex = 0;
-let map = null;
-let userMarker = null;
-let pinMarkers = [];
-let gpsWatchId = null;
-let pinMode = 'compass'; // compass | gps | addr
-let proximityTimers = {};
-
-const CAT_EMOJI = { meet: '📍', look: '👁', caution: '⚠️', party: '🎉' };
-const CAT_COLOR = { meet: 'var(--meet)', look: 'var(--look)', caution: 'var(--caution)', party: 'var(--party)' };
-const BEARING_LABELS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-
-// ──────────────────────────────────────────────
-// UTILS
-// ──────────────────────────────────────────────
-function bearingLabel(deg) {
-  return BEARING_LABELS[Math.round(deg / 22.5) % 16];
+  );
 }
 
-function toRad(d) { return d * Math.PI / 180; }
-function toDeg(r) { return r * 180 / Math.PI; }
-
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+// ── GPS Indicator ─────────────────────────────────────────────
+function GpsChip({ gps }) {
+  const acc = gps?.acc;
+  const color = !gps ? "#666" : acc < 15 ? "#44dd88" : acc < 50 ? "#f5a623" : "#ff6644";
+  const label = !gps ? "No GPS" : acc < 15 ? `±${acc}m ✓` : acc < 50 ? `±${acc}m ~` : `±${acc}m ✗`;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11,
+      fontFamily: "'Orbitron',monospace", color, opacity: 0.85 }}>
+      <div style={{ width: 7, height: 7, borderRadius: "50%", background: color,
+        boxShadow: `0 0 6px ${color}`, animation: gps ? "blink 1.5s ease-in-out infinite" : "none" }} />
+      {label}
+    </div>
+  );
 }
 
-function bearingTo(lat1, lng1, lat2, lng2) {
-  const dLng = toRad(lng2 - lng1);
-  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
-  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
+// ── Main App ──────────────────────────────────────────────────
+export default function App() {
+  const [screen, setScreen] = useState("home");
+  const [gps, setGps] = useState(null);
+  const [devHead, setDevHead] = useState(null);
 
-function destFromBearing(lat, lng, bearingDeg, distMetres) {
-  const R = 6371000;
-  const d = distMetres / R;
-  const b = toRad(bearingDeg);
-  const lat2 = Math.asin(Math.sin(toRad(lat))*Math.cos(d) + Math.cos(toRad(lat))*Math.sin(d)*Math.cos(b));
-  const lng2 = toRad(lng) + Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(toRad(lat)), Math.cos(d)-Math.sin(toRad(lat))*Math.sin(lat2));
-  return { lat: toDeg(lat2), lng: toDeg(lng2) };
-}
+  // Create state
+  const [cMode, setCMode] = useState("point");
+  const [locked, setLocked] = useState(false);
+  const [lockedBear, setLockedBear] = useState(0);
+  const [distVal, setDistVal] = useState("100");
+  const [distUnit, setDistUnit] = useState("m");
+  const [msg, setMsg] = useState("");
+  const [catIdx, setCatIdx] = useState(0);
+  const [expHrs, setExpHrs] = useState("24");
+  const [createdCode, setCreatedCode] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-function formatDist(m) {
-  if (m < 1000) return Math.round(m) + ' m';
-  return (m / 1000).toFixed(1) + ' km';
-}
+  // Navigate state
+  const [codeInput, setCodeInput] = useState("");
+  const [activePin, setActivePin] = useState(null);
+  const [navErr, setNavErr] = useState("");
+  const [navTarget, setNavTarget] = useState(null);
+  const [alerted, setAlerted] = useState(false);
+  const [arrived, setArrived] = useState(false);
 
-function formatETA(m) {
-  const walkMin = Math.ceil(m / 80); // ~80m/min walking
-  if (walkMin < 60) return walkMin + ' min walk';
-  return Math.ceil(walkMin/60) + 'h walk';
-}
+  // My pins
+  const [myPins, setMyPins] = useState([]);
+  const [pinsLoaded, setPinsLoaded] = useState(false);
 
-function encodeSession(sess) {
-  return btoa(encodeURIComponent(JSON.stringify(sess)));
-}
+  // GPS
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      p => setGps({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
+      () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
 
-function decodeSession(code) {
-  try { return JSON.parse(decodeURIComponent(atob(code))); }
-  catch(e) { return null; }
-}
-
-function showToast(msg, isError = false) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.borderColor = isError ? '#ff4444' : 'var(--accent)';
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-function showView(id) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0, 0);
-}
-
-// ──────────────────────────────────────────────
-// GPS
-// ──────────────────────────────────────────────
-function startGPS() {
-  if (!navigator.geolocation) {
-    document.getElementById('gpsStatusText').textContent = 'No GPS';
-    return;
-  }
-  gpsWatchId = navigator.geolocation.watchPosition(pos => {
-    myLat = pos.coords.latitude;
-    myLng = pos.coords.longitude;
-    gpsAccuracy = pos.coords.accuracy;
-
-    const dot = document.getElementById('gpsStatusDot');
-    const txt = document.getElementById('gpsStatusText');
-    dot.classList.add('active');
-
-    if (gpsAccuracy < 20) {
-      txt.textContent = '±' + Math.round(gpsAccuracy) + 'm';
-      updateAccuracyBadge('good');
-    } else if (gpsAccuracy < 100) {
-      txt.textContent = '±' + Math.round(gpsAccuracy) + 'm';
-      updateAccuracyBadge('ok');
-    } else {
-      txt.textContent = '±' + Math.round(gpsAccuracy) + 'm (poor)';
-      updateAccuracyBadge('bad');
-    }
-
-    document.getElementById('gpsCoords').textContent = myLat.toFixed(6) + ', ' + myLng.toFixed(6);
-    if (currentSession) updateNavigation();
-    checkProximity();
-    updateUserMapMarker();
-  }, err => {
-    document.getElementById('gpsStatusText').textContent = 'GPS Error';
-  }, { enableHighAccuracy: true, maximumAge: 3000 });
-}
-
-function updateAccuracyBadge(level) {
-  ['gpsAccuracy', 'gpsAccuracy2'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const msgs = {
-      good: ['gps-good', '✓ GPS accuracy good (±' + Math.round(gpsAccuracy) + 'm)'],
-      ok: ['gps-ok', '⚡ GPS moderate (±' + Math.round(gpsAccuracy) + 'm) — move outdoors for better accuracy'],
-      bad: ['gps-bad', '⚠ GPS poor (±' + Math.round(gpsAccuracy) + 'm) — try Address mode or wait outdoors']
+  // Compass
+  useEffect(() => {
+    const h = e => {
+      let v = null;
+      if (e.webkitCompassHeading != null) v = e.webkitCompassHeading;
+      else if (e.absolute && e.alpha != null) v = (360 - e.alpha + 360) % 360;
+      else if (e.alpha != null) v = (360 - e.alpha + 360) % 360;
+      if (v != null) setDevHead(Math.round(v));
     };
-    const [cls, msg] = msgs[level];
-    el.className = 'gps-accuracy ' + cls;
-    el.textContent = msg;
-  });
-}
+    window.addEventListener("deviceorientationabsolute", h, true);
+    window.addEventListener("deviceorientation", h, true);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", h, true);
+      window.removeEventListener("deviceorientation", h, true);
+    };
+  }, []);
 
-function refreshGps() {
-  showToast('Refreshing GPS…');
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      myLat = pos.coords.latitude;
-      myLng = pos.coords.longitude;
-      gpsAccuracy = pos.coords.accuracy;
-      document.getElementById('gpsCoords').textContent = myLat.toFixed(6) + ', ' + myLng.toFixed(6);
-      showToast('GPS updated ✓');
-    }, null, { enableHighAccuracy: true });
-  }
-}
+  const currentBear = locked ? lockedBear : (devHead ?? 0);
 
-// ──────────────────────────────────────────────
-// COMPASS DIAL (creation)
-// ──────────────────────────────────────────────
-let compassCanvas, compassCtx;
-
-function initCompassDial() {
-  compassCanvas = document.getElementById('compassDial');
-  if (!compassCanvas) return;
-  compassCtx = compassCanvas.getContext('2d');
-  drawCompassDial(compassAngle);
-
-  // Drag to rotate
-  let dragging = false;
-  let cx = 80, cy = 80;
-
-  function getAngle(e) {
-    const rect = compassCanvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const x = (clientX - rect.left) * (160 / rect.width) - cx;
-    const y = (clientY - rect.top) * (160 / rect.height) - cy;
-    return (toDeg(Math.atan2(x, -y)) + 360) % 360;
-  }
-
-  ['mousedown', 'touchstart'].forEach(ev => compassCanvas.addEventListener(ev, e => {
-    if (usingDeviceCompass) return;
-    dragging = true;
-    compassAngle = getAngle(e);
-    updateCompassDisplay();
-    e.preventDefault();
-  }, { passive: false }));
-
-  ['mousemove', 'touchmove'].forEach(ev => window.addEventListener(ev, e => {
-    if (!dragging || usingDeviceCompass) return;
-    compassAngle = getAngle(e);
-    updateCompassDisplay();
-  }));
-
-  ['mouseup', 'touchend'].forEach(ev => window.addEventListener(ev, () => dragging = false));
-}
-
-function drawCompassDial(angleDeg) {
-  if (!compassCtx) return;
-  const cx = 80, cy = 80, r = 72;
-  const ctx = compassCtx;
-  ctx.clearRect(0, 0, 160, 160);
-
-  // Outer ring
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.strokeStyle = '#1e3048';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // Tick marks
-  for (let i = 0; i < 360; i += 10) {
-    const rad = toRad(i - 90);
-    const inner = i % 90 === 0 ? r - 14 : i % 30 === 0 ? r - 10 : r - 6;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(rad) * inner, cy + Math.sin(rad) * inner);
-    ctx.lineTo(cx + Math.cos(rad) * (r - 2), cy + Math.sin(rad) * (r - 2));
-    ctx.strokeStyle = i % 90 === 0 ? '#00d4ff' : '#1e3048';
-    ctx.lineWidth = i % 90 === 0 ? 2 : 1;
-    ctx.stroke();
-  }
-
-  // Cardinal labels
-  [['N',0,'#00d4ff'],['E',90,'#4a7a99'],['S',180,'#4a7a99'],['W',270,'#4a7a99']].forEach(([lbl, deg, col]) => {
-    const rad = toRad(deg - 90);
-    ctx.fillStyle = col;
-    ctx.font = 'bold 10px Space Mono, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(lbl, cx + Math.cos(rad) * (r - 18), cy + Math.sin(rad) * (r - 18));
-  });
-
-  // Needle
-  const needleRad = toRad(angleDeg - 90);
-  const needleLen = r - 20;
-
-  // Glow
-  ctx.shadowColor = '#ff6b35';
-  ctx.shadowBlur = 8;
-
-  ctx.beginPath();
-  ctx.moveTo(cx + Math.cos(needleRad) * needleLen, cy + Math.sin(needleRad) * needleLen);
-  ctx.lineTo(cx + Math.cos(needleRad + Math.PI/2) * 6, cy + Math.sin(needleRad + Math.PI/2) * 6);
-  ctx.lineTo(cx - Math.cos(needleRad) * (r - 45), cy - Math.sin(needleRad) * (r - 45));
-  ctx.lineTo(cx + Math.cos(needleRad - Math.PI/2) * 6, cy + Math.sin(needleRad - Math.PI/2) * 6);
-  ctx.closePath();
-  ctx.fillStyle = '#ff6b35';
-  ctx.fill();
-
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = 'transparent';
-
-  // Center dot
-  ctx.beginPath();
-  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-  ctx.fillStyle = '#0d1520';
-  ctx.fill();
-  ctx.strokeStyle = '#00d4ff';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
-  ctx.fillStyle = '#00d4ff';
-  ctx.fill();
-}
-
-function updateCompassDisplay() {
-  const deg = Math.round(compassAngle);
-  document.getElementById('compassDeg').textContent = String(deg).padStart(3,'0') + '°';
-  document.getElementById('compassDir').textContent = bearingLabel(deg);
-  drawCompassDial(compassAngle);
-}
-
-function toggleDeviceCompass() {
-  if (usingDeviceCompass) {
-    usingDeviceCompass = false;
-    document.getElementById('deviceCompassBtn').classList.remove('active');
-    document.getElementById('deviceCompassBtn').textContent = '📱 Use Device Compass';
-    return;
-  }
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(state => {
-      if (state === 'granted') activateDeviceCompass();
-      else showToast('Permission denied', true);
-    });
-  } else {
-    activateDeviceCompass();
-  }
-}
-
-function activateDeviceCompass() {
-  usingDeviceCompass = true;
-  document.getElementById('deviceCompassBtn').classList.add('active');
-  document.getElementById('deviceCompassBtn').textContent = '✓ Using Device Compass';
-  window.addEventListener('deviceorientationabsolute', handleOrientation, true);
-  window.addEventListener('deviceorientation', handleOrientation, true);
-}
-
-function handleOrientation(e) {
-  if (!usingDeviceCompass) return;
-  let heading = null;
-  if (e.absolute && e.alpha !== null) heading = (360 - e.alpha) % 360;
-  else if (e.webkitCompassHeading) heading = e.webkitCompassHeading;
-  if (heading !== null) {
-    compassAngle = heading;
-    deviceHeading = heading;
-    updateCompassDisplay();
-  }
-}
-
-// ──────────────────────────────────────────────
-// PIN MANAGEMENT
-// ──────────────────────────────────────────────
-let pendingPins = [];
-
-function setPinMode(mode) {
-  pinMode = mode;
-  document.getElementById('modeCompass').style.display = mode === 'compass' ? '' : 'none';
-  document.getElementById('modeGps').style.display = mode === 'gps' ? '' : 'none';
-  document.getElementById('modeAddr').style.display = mode === 'addr' ? '' : 'none';
-  ['toggleCompass','toggleGps','toggleAddr'].forEach((id, i) => {
-    document.getElementById(id).classList.toggle('active', i === ['compass','gps','addr'].indexOf(mode));
-  });
-}
-
-function addPin() {
-  const msg = document.getElementById('pinMsg').value.trim();
-  const cat = document.getElementById('pinCategory').value;
-  const expMins = parseInt(document.getElementById('pinExpiry').value);
-  const proxM = parseInt(document.getElementById('pinProx').value);
-
-  let targetLat, targetLng, bearingDeg, distMetres;
-
-  if (pinMode === 'compass') {
-    if (myLat === null) {
-      showToast('Waiting for GPS… try Address mode', true); return;
+  // Nav calc
+  useEffect(() => {
+    if (!activePin) return;
+    if (activePin.mode === "here") setNavTarget({ lat: activePin.lat, lon: activePin.lon });
+    else {
+      const [lt, ln] = destPt(activePin.oLat, activePin.oLon, activePin.bear, activePin.distM);
+      setNavTarget({ lat: lt, lon: ln });
     }
-    const dist = parseFloat(document.getElementById('pinDist').value);
-    const unit = document.getElementById('pinUnit').value;
-    distMetres = unit === 'm' ? dist : unit === 'km' ? dist * 1000 : dist * 1609;
-    bearingDeg = Math.round(compassAngle);
-    const dest = destFromBearing(myLat, myLng, bearingDeg, distMetres);
-    targetLat = dest.lat;
-    targetLng = dest.lng;
+  }, [activePin]);
 
-  } else if (pinMode === 'gps') {
-    if (myLat === null) { showToast('GPS not available', true); return; }
-    targetLat = myLat;
-    targetLng = myLng;
-    bearingDeg = null;
-    distMetres = 0;
+  const navBear = navTarget && gps ? calcBear(gps.lat, gps.lon, navTarget.lat, navTarget.lon) : null;
+  const navDist = navTarget && gps ? haverDist(gps.lat, gps.lon, navTarget.lat, navTarget.lon) : null;
+  const arrowAngle = navBear != null && devHead != null ? (navBear - devHead + 360) % 360 : navBear;
 
-  } else {
-    const raw = document.getElementById('manualCoords').value.trim();
-    const parts = raw.split(',');
-    if (parts.length !== 2) { showToast('Enter coordinates as: lat, lng', true); return; }
-    targetLat = parseFloat(parts[0].trim());
-    targetLng = parseFloat(parts[1].trim());
-    if (isNaN(targetLat) || isNaN(targetLng)) { showToast('Invalid coordinates', true); return; }
-    bearingDeg = null;
-    distMetres = null;
-  }
+  // Proximity
+  useEffect(() => {
+    if (navDist == null) return;
+    if (navDist < 25 && !alerted) {
+      setAlerted(true);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+    }
+    if (navDist < 8 && !arrived) {
+      setArrived(true);
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+    }
+    if (navDist > 50) { setAlerted(false); setArrived(false); }
+  }, [navDist]);
 
-  const pin = {
-    id: Date.now().toString(36),
-    lat: targetLat,
-    lng: targetLng,
-    bearing: bearingDeg,
-    dist: distMetres,
-    msg: msg || 'No message',
-    cat: cat,
-    expiry: expMins > 0 ? Date.now() + expMins * 60000 : 0,
-    prox: proxM,
-    createdAt: Date.now()
+  const loadPins = async () => {
+    try { const r = await window.storage.get("mypins"); if (r) setMyPins(JSON.parse(r.value)); } catch {}
+    setPinsLoaded(true);
+  };
+  useEffect(() => { if (screen === "mypins" && !pinsLoaded) loadPins(); }, [screen]);
+
+  const handleCreate = async () => {
+    if (!gps) { alert("Waiting for GPS location…"); return; }
+    if (!msg.trim()) { alert("Please enter a message for this pin."); return; }
+    setSaving(true);
+    const mult = distUnit === "km" ? 1000 : distUnit === "mi" ? 1609.34 : 1;
+    const distM = parseFloat(distVal || "100") * mult;
+    const code = generateCode();
+    const pin = { code, message: msg.trim(), cat: CATS[catIdx], expiresAt: Date.now() + parseFloat(expHrs || "24") * 3600000, createdAt: Date.now(), mode: cMode };
+    if (cMode === "point") { pin.oLat = gps.lat; pin.oLon = gps.lon; pin.bear = currentBear; pin.distM = distM; }
+    else { pin.lat = gps.lat; pin.lon = gps.lon; pin.acc = gps.acc; }
+    try {
+      await window.storage.set(`pin:${code}`, JSON.stringify(pin), true);
+      let ps = [];
+      try { const r = await window.storage.get("mypins"); if (r) ps = JSON.parse(r.value); } catch {}
+      ps.unshift({ code, msg: msg.trim(), cat: CATS[catIdx], expiresAt: pin.expiresAt });
+      await window.storage.set("mypins", JSON.stringify(ps));
+      setMyPins(ps);
+      setCreatedCode(code);
+    } catch { alert("Storage error. Try again."); }
+    setSaving(false);
   };
 
-  pendingPins.push(pin);
-  document.getElementById('pinMsg').value = '';
-  renderCreatePinList();
-  showToast(CAT_EMOJI[cat] + ' Pin added!');
-}
+  const handleNav = async (overCode) => {
+    const raw = (overCode || codeInput).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const code = raw.length >= 8 ? raw.slice(0, 4) + "-" + raw.slice(4, 8) : raw;
+    setNavErr("");
+    try {
+      const r = await window.storage.get(`pin:${code}`, true);
+      if (!r) { setNavErr("Code not found. Check the code and try again."); return; }
+      const pin = JSON.parse(r.value);
+      if (pin.expiresAt < Date.now()) { setNavErr("This pin has expired."); return; }
+      setActivePin(pin); setAlerted(false); setArrived(false); setScreen("navigate");
+    } catch { setNavErr("Code not found. Check the code and try again."); }
+  };
 
-function renderCreatePinList() {
-  const el = document.getElementById('createPinList');
-  if (pendingPins.length === 0) {
-    el.innerHTML = '<div class="empty-state"><span class="big">🗺️</span>No pins yet. Add one above!</div>';
-    return;
-  }
-  el.innerHTML = pendingPins.map((p, i) => pinCardHTML(p, i, true)).join('');
-}
+  const copy = async (txt) => {
+    try { await navigator.clipboard.writeText(txt); } catch {}
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  };
 
-function pinCardHTML(p, i, showDelete = false) {
-  const distStr = p.dist !== null && p.dist !== undefined ? formatDist(p.dist) : '—';
-  const bearingStr = p.bearing !== null && p.bearing !== undefined ? String(p.bearing).padStart(3,'0') + '° ' + bearingLabel(p.bearing) : 'GPS Pin';
-  return `
-    <div class="pin-card">
-      <div class="pin-icon ${p.cat}">${CAT_EMOJI[p.cat]}</div>
-      <div class="pin-info">
-        <div class="pin-title" style="color:${CAT_COLOR[p.cat]}">${p.cat.charAt(0).toUpperCase()+p.cat.slice(1)}</div>
-        <div class="pin-msg">${p.msg}</div>
-        <div class="pin-meta">
-          <span class="pin-badge bearing">${bearingStr}</span>
-          <span class="pin-badge dist">${distStr}</span>
+  const resetCreate = () => {
+    setMsg(""); setCatIdx(0); setDistVal("100"); setDistUnit("m");
+    setExpHrs("24"); setCMode("point"); setLocked(false); setCreatedCode(null); setCopied(false);
+  };
+
+  // ── Shared styles ──────────────────────────────────────────
+  const s = {
+    root: { minHeight: "100dvh", background: "#080b0f", color: "#e0d8c8", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, overflowX: "hidden" },
+    header: { padding: "16px 20px 12px", borderBottom: "1px solid rgba(212,136,42,0.15)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 10 },
+    logo: { fontFamily: "'Orbitron',monospace", fontSize: 18, color: "#f5a623", fontWeight: 900, letterSpacing: 3, textShadow: "0 0 20px rgba(245,166,35,0.5)" },
+    tab: (active) => ({ padding: "8px 14px", borderRadius: 6, fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, cursor: "pointer", letterSpacing: 1, background: active ? "rgba(245,166,35,0.18)" : "transparent", color: active ? "#f5a623" : "rgba(224,216,200,0.5)", border: "1px solid " + (active ? "rgba(245,166,35,0.4)" : "transparent"), transition: "all 0.2s" }),
+    card: { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(212,136,42,0.15)", borderRadius: 12, padding: 20 },
+    label: { fontSize: 12, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.7)", letterSpacing: 2, marginBottom: 6, textTransform: "uppercase" },
+    input: { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(212,136,42,0.25)", borderRadius: 8, padding: "10px 14px", color: "#e0d8c8", fontFamily: "'Rajdhani',sans-serif", fontSize: 16, outline: "none", boxSizing: "border-box" },
+    btn: (variant = "primary") => ({
+      padding: "12px 24px", borderRadius: 8, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, fontSize: 15, letterSpacing: 1.5,
+      cursor: "pointer", border: "none", transition: "all 0.2s",
+      background: variant === "primary" ? "linear-gradient(135deg,#d4882a,#f0a830)" : variant === "ghost" ? "transparent" : "rgba(255,255,255,0.06)",
+      color: variant === "primary" ? "#080b0f" : "#e0d8c8",
+      border: variant === "ghost" ? "1px solid rgba(212,136,42,0.3)" : "none",
+      boxShadow: variant === "primary" ? "0 4px 20px rgba(212,136,42,0.3)" : "none",
+    }),
+    bigNum: { fontFamily: "'Orbitron',monospace", fontSize: 42, color: "#f5a623", fontWeight: 700, textShadow: "0 0 30px rgba(245,166,35,0.5)", letterSpacing: 2 },
+    mono: { fontFamily: "'Orbitron',monospace" },
+  };
+
+  // ── HOME ──────────────────────────────────────────────────
+  if (screen === "home") return (
+    <div style={s.root}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
+        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+        @keyframes spin { from{transform:rotate(0)}to{transform:rotate(360deg)} }
+        @keyframes fadeup { from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)} }
+        @keyframes ripple { 0%{transform:scale(1);opacity:0.6}100%{transform:scale(2.5);opacity:0} }
+        input::placeholder{color:rgba(224,216,200,0.3)}
+        textarea::placeholder{color:rgba(224,216,200,0.3)}
+        textarea{resize:none}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(212,136,42,0.3);border-radius:2px}
+      `}</style>
+
+      {/* Topographic background */}
+      <div style={{ position: "fixed", inset: 0, opacity: 0.07, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
+
+      <header style={s.header}>
+        <div style={s.logo}>⬡ POINTME</div>
+        <GpsChip gps={gps} />
+      </header>
+
+      <div style={{ padding: "32px 20px 24px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.4s ease" }}>
+        {/* Hero */}
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <CompassRose bearing={devHead} size={160} />
+          </div>
+          <h1 style={{ fontFamily: "'Orbitron',monospace", fontSize: 13, color: "rgba(212,136,42,0.7)", letterSpacing: 4, margin: 0, marginBottom: 8 }}>COMPASS SHARING</h1>
+          <p style={{ color: "rgba(224,216,200,0.5)", fontSize: 14, margin: 0, lineHeight: 1.6 }}>
+            Point. Share a code. Your friends navigate to you—from anywhere.
+          </p>
+          {devHead != null && (
+            <div style={{ marginTop: 12, fontSize: 13, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.6)" }}>
+              {devHead}° {cardDir(devHead)}
+            </div>
+          )}
+        </div>
+
+        {/* Enter code */}
+        <div style={{ ...s.card, marginBottom: 16 }}>
+          <div style={s.label}>Enter Code</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input style={{ ...s.input, flex: 1, letterSpacing: 3, fontFamily: "'Orbitron',monospace", fontSize: 14 }}
+              placeholder="XXXX-XXXX" value={codeInput}
+              onChange={e => setCodeInput(e.target.value.toUpperCase().slice(0, 9))}
+              onKeyDown={e => e.key === "Enter" && handleNav()} />
+            <button style={{ ...s.btn("primary"), padding: "10px 18px", whiteSpace: "nowrap" }} onClick={() => handleNav()}>GO →</button>
+          </div>
+          {navErr && <div style={{ color: "#ff6644", fontSize: 12, marginTop: 8, fontFamily: "'Orbitron',monospace" }}>{navErr}</div>}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+          <button style={{ ...s.btn("ghost"), flex: 1, textAlign: "center" }} onClick={() => { resetCreate(); setScreen("create"); }}>
+            + CREATE PIN
+          </button>
+          <button style={{ ...s.btn("secondary"), flex: 1, textAlign: "center" }} onClick={() => setScreen("mypins")}>
+            MY PINS
+          </button>
+        </div>
+
+        {/* Feature pills */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {[["🧭","Point Direction","Bearing + distance pin"],["📍","Drop Here","Exact GPS location"],["⏰","Auto-Expire","Pins expire after set time"],["📳","Proximity Buzz","Vibrates when you arrive"]].map(([e, t, d]) => (
+            <div key={t} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,136,42,0.1)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+              <span style={{ marginRight: 6 }}>{e}</span>
+              <span style={{ color: "#e0d8c8", fontWeight: 600 }}>{t}</span>
+              <div style={{ color: "rgba(224,216,200,0.4)", fontSize: 11, marginTop: 2 }}>{d}</div>
+            </div>
+          ))}
         </div>
       </div>
-      <div class="pin-actions">
-        ${showDelete ? `<button class="del-btn" onclick="deletePin(${i})">✕</button>` : `<button class="nav-btn" onclick="selectNavPin(${i})">▶</button>`}
+    </div>
+  );
+
+  // ── CREATE ─────────────────────────────────────────────────
+  if (screen === "create") return (
+    <div style={s.root}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}@keyframes fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}input::placeholder{color:rgba(224,216,200,0.3)}textarea::placeholder{color:rgba(224,216,200,0.3)}textarea{resize:none}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(212,136,42,0.3);border-radius:2px}`}</style>
+      <div style={{ position: "fixed", inset: 0, opacity: 0.05, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
+
+      <header style={s.header}>
+        <button style={{ background: "none", border: "none", color: "rgba(212,136,42,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace", letterSpacing: 1 }} onClick={() => setScreen("home")}>← BACK</button>
+        <div style={s.logo}>CREATE PIN</div>
+        <GpsChip gps={gps} />
+      </header>
+
+      {createdCode ? (
+        // SUCCESS
+        <div style={{ padding: "32px 20px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 14, color: "#44dd88", letterSpacing: 3 }}>PIN CREATED!</div>
+          </div>
+          <div style={{ ...s.card, textAlign: "center", marginBottom: 16, border: "1px solid rgba(68,221,136,0.3)" }}>
+            <div style={{ fontSize: 11, fontFamily: "'Orbitron',monospace", color: "rgba(68,221,136,0.7)", letterSpacing: 3, marginBottom: 12 }}>SHARE THIS CODE</div>
+            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 36, color: "#f5a623", letterSpacing: 8, fontWeight: 900, textShadow: "0 0 30px rgba(245,166,35,0.5)", marginBottom: 16 }}>
+              {createdCode}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(224,216,200,0.5)", marginBottom: 16 }}>
+              {CATS[catIdx].e} {msg} · expires in {expHrs}h
+            </div>
+            <button style={{ ...s.btn("primary"), width: "100%" }} onClick={() => copy(createdCode)}>
+              {copied ? "✓ COPIED!" : "COPY CODE"}
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button style={{ ...s.btn("ghost"), flex: 1 }} onClick={resetCreate}>+ NEW PIN</button>
+            <button style={{ ...s.btn("secondary"), flex: 1 }} onClick={() => setScreen("home")}>HOME</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ padding: "20px 20px 32px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
+          {/* Mode selector */}
+          <div style={{ ...s.card, marginBottom: 14 }}>
+            <div style={s.label}>Pin Mode</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[["point", "🧭", "Point Direction", "Bearing + distance (good for imprecise GPS)"],
+                ["here", "📍", "Drop Here", "Exact GPS coordinates"]].map(([m, e, t, d]) => (
+                <button key={m} onClick={() => setCMode(m)} style={{
+                  flex: 1, padding: 12, borderRadius: 8, cursor: "pointer", textAlign: "left",
+                  background: cMode === m ? "rgba(245,166,35,0.12)" : "rgba(255,255,255,0.03)",
+                  border: "1px solid " + (cMode === m ? "rgba(245,166,35,0.5)" : "rgba(212,136,42,0.15)"),
+                  color: "#e0d8c8", transition: "all 0.2s"
+                }}>
+                  <div style={{ fontSize: 18, marginBottom: 4 }}>{e}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{t}</div>
+                  <div style={{ fontSize: 11, color: "rgba(224,216,200,0.45)", lineHeight: 1.3, marginTop: 2 }}>{d}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Compass (point mode) */}
+          {cMode === "point" && (
+            <div style={{ ...s.card, marginBottom: 14, textAlign: "center" }}>
+              <div style={s.label}>Compass Direction</div>
+              {devHead == null && (
+                <div style={{ fontSize: 12, color: "#f5a623", marginBottom: 12, fontFamily: "'Orbitron',monospace" }}>
+                  ⚠ Rotate device to calibrate compass
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                <CompassRose bearing={locked ? lockedBear : devHead} size={160} label={`${locked ? lockedBear : (devHead ?? 0)}° ${cardDir(locked ? lockedBear : (devHead ?? 0))}`} />
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                <button style={{
+                  ...s.btn(locked ? "primary" : "ghost"), fontSize: 13, padding: "10px 20px"
+                }} onClick={() => {
+                  if (!locked) { setLockedBear(devHead ?? 0); setLocked(true); }
+                  else setLocked(false);
+                }}>
+                  {locked ? `🔒 LOCKED ${lockedBear}° ${cardDir(lockedBear)}` : "🔓 TAP TO LOCK"}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(224,216,200,0.35)", marginTop: 8 }}>
+                Point your phone in the desired direction, then tap to lock
+              </div>
+            </div>
+          )}
+
+          {/* Distance (point mode) */}
+          {cMode === "point" && (
+            <div style={{ ...s.card, marginBottom: 14 }}>
+              <div style={s.label}>Approximate Distance</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input style={{ ...s.input, flex: 1 }} type="number" placeholder="100"
+                  value={distVal} onChange={e => setDistVal(e.target.value)} />
+                <select style={{ ...s.input, width: "auto", cursor: "pointer", paddingRight: 8 }}
+                  value={distUnit} onChange={e => setDistUnit(e.target.value)}>
+                  <option value="m">m</option>
+                  <option value="km">km</option>
+                  <option value="mi">mi</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* GPS info (here mode) */}
+          {cMode === "here" && (
+            <div style={{ ...s.card, marginBottom: 14 }}>
+              <div style={s.label}>Your Location</div>
+              {gps ? (
+                <>
+                  <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 12, color: "rgba(212,136,42,0.8)", marginBottom: 4 }}>
+                    {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
+                  </div>
+                  <GpsChip gps={gps} />
+                  {gps.acc > 50 && (
+                    <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,68,70,0.1)", border: "1px solid rgba(255,68,70,0.2)", borderRadius: 6, fontSize: 12, color: "#ff8866" }}>
+                      ⚠ GPS accuracy is low (±{gps.acc}m). Try "Point Direction" mode instead for better results outdoors, or wait for better signal.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ color: "rgba(224,216,200,0.4)", fontSize: 13 }}>Acquiring GPS…</div>
+              )}
+            </div>
+          )}
+
+          {/* Message */}
+          <div style={{ ...s.card, marginBottom: 14 }}>
+            <div style={s.label}>Message</div>
+            <textarea style={{ ...s.input, height: 72 }} placeholder="e.g. I'm near the red tent, come find me!"
+              value={msg} onChange={e => setMsg(e.target.value)} maxLength={120} />
+            <div style={{ textAlign: "right", fontSize: 11, color: "rgba(224,216,200,0.3)", marginTop: 4 }}>{msg.length}/120</div>
+          </div>
+
+          {/* Category */}
+          <div style={{ ...s.card, marginBottom: 14 }}>
+            <div style={s.label}>Category</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {CATS.map((cat, i) => (
+                <button key={i} onClick={() => setCatIdx(i)} style={{
+                  padding: "6px 10px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 600,
+                  background: catIdx === i ? `${cat.c}22` : "rgba(255,255,255,0.03)",
+                  border: "1px solid " + (catIdx === i ? cat.c + "66" : "rgba(212,136,42,0.1)"),
+                  color: catIdx === i ? cat.c : "rgba(224,216,200,0.5)", transition: "all 0.15s"
+                }}>
+                  {cat.e} {cat.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Expiry */}
+          <div style={{ ...s.card, marginBottom: 20 }}>
+            <div style={s.label}>Pin Expires In</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[["1", "1 hr"], ["6", "6 hrs"], ["24", "24 hrs"], ["72", "3 days"], ["168", "1 week"]].map(([v, l]) => (
+                <button key={v} onClick={() => setExpHrs(v)} style={{
+                  padding: "8px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace",
+                  background: expHrs === v ? "rgba(245,166,35,0.15)" : "rgba(255,255,255,0.03)",
+                  border: "1px solid " + (expHrs === v ? "rgba(245,166,35,0.5)" : "rgba(212,136,42,0.12)"),
+                  color: expHrs === v ? "#f5a623" : "rgba(224,216,200,0.5)", transition: "all 0.15s"
+                }}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          <button style={{ ...s.btn("primary"), width: "100%", padding: 16, fontSize: 16 }}
+            onClick={handleCreate} disabled={saving}>
+            {saving ? "SAVING…" : "CREATE & GET CODE"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── NAVIGATE ───────────────────────────────────────────────
+  if (screen === "navigate") return (
+    <div style={s.root}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}@keyframes fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}@keyframes ripple{0%{transform:scale(1);opacity:0.6}100%{transform:scale(2.5);opacity:0}}`}</style>
+      <div style={{ position: "fixed", inset: 0, opacity: 0.05, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
+
+      <header style={s.header}>
+        <button style={{ background: "none", border: "none", color: "rgba(212,136,42,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace", letterSpacing: 1 }}
+          onClick={() => { setScreen("home"); setActivePin(null); setNavTarget(null); }}>← BACK</button>
+        <div style={s.logo}>NAVIGATE</div>
+        <GpsChip gps={gps} />
+      </header>
+
+      <div style={{ padding: "20px 20px 32px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
+        {/* Pin info card */}
+        {activePin && (
+          <div style={{ ...s.card, marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 12, border: `1px solid ${activePin.cat?.c}33` }}>
+            <div style={{ fontSize: 28 }}>{activePin.cat?.e}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{activePin.message}</div>
+              <div style={{ display: "flex", gap: 12, fontSize: 12, color: "rgba(224,216,200,0.5)" }}>
+                <span style={{ fontFamily: "'Orbitron',monospace" }}>{activePin.code}</span>
+                <span>·</span>
+                <span>expires {fmtTime(activePin.expiresAt - Date.now())}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Arrived banner */}
+        {arrived && (
+          <div style={{ textAlign: "center", padding: "16px", marginBottom: 16, background: "rgba(68,221,136,0.1)", border: "1px solid rgba(68,221,136,0.4)", borderRadius: 12, animation: "fadeup 0.3s ease" }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>🎯</div>
+            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 14, color: "#44dd88", letterSpacing: 2 }}>YOU'VE ARRIVED!</div>
+          </div>
+        )}
+
+        {/* Main compass / arrow */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24 }}>
+          <NavArrow angle={arrowAngle} size={220} />
+          <div style={{ marginTop: 32, textAlign: "center" }}>
+            {navDist != null ? (
+              <>
+                <div style={s.bigNum}>{fmtDist(navDist)}</div>
+                <div style={{ fontSize: 13, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.6)", marginTop: 6, letterSpacing: 2 }}>
+                  {navBear != null ? `${Math.round(navBear)}° ${cardDir(navBear)}` : "CALCULATING…"}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 13, fontFamily: "'Orbitron',monospace", color: "rgba(224,216,200,0.4)" }}>
+                {!gps ? "ACQUIRING GPS…" : "CALCULATING…"}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+          {[
+            ["BEARING", navBear != null ? `${Math.round(navBear)}°` : "—", "#f5a623"],
+            ["YOUR HDG", devHead != null ? `${devHead}°` : "—", "rgba(212,136,42,0.7)"],
+            ["GPS ACC", gps ? `±${gps.acc}m` : "—", gps?.acc < 20 ? "#44dd88" : gps?.acc < 50 ? "#f5a623" : "#ff6644"],
+          ].map(([l, v, c]) => (
+            <div key={l} style={{ flex: 1, ...s.card, textAlign: "center", padding: 12 }}>
+              <div style={{ fontSize: 9, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.5)", letterSpacing: 2, marginBottom: 4 }}>{l}</div>
+              <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 16, color: c, fontWeight: 700 }}>{v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tip */}
+        {devHead == null && (
+          <div style={{ ...s.card, marginBottom: 12, background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.2)" }}>
+            <div style={{ fontSize: 12, color: "rgba(245,166,35,0.8)" }}>
+              🧭 <strong>Tip:</strong> Rotate your phone in a figure-8 pattern to calibrate the compass. The arrow will point toward the pin relative to where you're facing.
+            </div>
+          </div>
+        )}
+
+        {navDist != null && navDist < 25 && !arrived && (
+          <div style={{ ...s.card, marginBottom: 12, background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.4)", textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "#f5a623", fontFamily: "'Orbitron',monospace", letterSpacing: 1 }}>
+              📳 ALMOST THERE — {fmtDist(navDist)} away
+            </div>
+          </div>
+        )}
+
+        {activePin?.mode === "point" && gps && (
+          <div style={{ fontSize: 11, color: "rgba(224,216,200,0.3)", textAlign: "center", fontFamily: "'Orbitron',monospace" }}>
+            Target computed from {Math.round(haverDist(gps.lat, gps.lon, activePin.oLat, activePin.oLon))}m origin · {Math.round(activePin.bear)}° · {fmtDist(activePin.distM)}
+          </div>
+        )}
       </div>
-    </div>`;
-}
+    </div>
+  );
 
-function deletePin(i) {
-  pendingPins.splice(i, 1);
-  renderCreatePinList();
-}
+  // ── MY PINS ────────────────────────────────────────────────
+  if (screen === "mypins") return (
+    <div style={s.root}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}@keyframes fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ position: "fixed", inset: 0, opacity: 0.05, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
 
-function startCreate() {
-  pendingPins = [];
-  renderCreatePinList();
-  showView('viewCreate');
-  setTimeout(() => {
-    initCompassDial();
-    updateCompassDisplay();
-  }, 100);
-}
+      <header style={s.header}>
+        <button style={{ background: "none", border: "none", color: "rgba(212,136,42,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace", letterSpacing: 1 }} onClick={() => setScreen("home")}>← BACK</button>
+        <div style={s.logo}>MY PINS</div>
+        <GpsChip gps={gps} />
+      </header>
 
-function finalizeSession() {
-  const name = document.getElementById('sessionName').value.trim() || 'My Session';
-  if (pendingPins.length === 0) { showToast('Add at least one pin!', true); return; }
-
-  currentSession = {
-    name,
-    pins: pendingPins,
-    created: Date.now(),
-    creatorLat: myLat,
-    creatorLng: myLng
-  };
-
-  const code = encodeSession(currentSession);
-  const url = window.location.href.split('#')[0] + '#' + code;
-  document.getElementById('shareCode').textContent = url.length > 60 ? code.substring(0,20)+'…' : url;
-  document.getElementById('shareCode').dataset.url = url;
-  document.getElementById('shareCode').dataset.code = code;
-
-  renderSharePinList();
-  showView('viewShare');
-  document.getElementById('tabBar').style.display = 'flex';
-}
-
-function renderSharePinList() {
-  if (!currentSession) return;
-  document.getElementById('sharePinList').innerHTML = currentSession.pins.map((p, i) => pinCardHTML(p, i, false)).join('');
-}
-
-function copyLink() {
-  const url = document.getElementById('shareCode').dataset.url;
-  navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => {
-    prompt('Copy this link:', url);
-  });
-}
-
-function copyCode() {
-  const code = document.getElementById('shareCode').dataset.code;
-  navigator.clipboard.writeText(code).then(() => showToast('Code copied!')).catch(() => {
-    prompt('Copy this code:', code);
-  });
-}
-
-// ──────────────────────────────────────────────
-// JOIN
-// ──────────────────────────────────────────────
-function showJoin() {
-  document.getElementById('joinCodeInput').value = '';
-  showView('viewJoin');
-}
-
-function joinSession() {
-  const code = document.getElementById('joinCodeInput').value.trim();
-  if (!code) { showToast('Enter a code', true); return; }
-  const sess = decodeSession(code);
-  if (!sess) { showToast('Invalid code', true); return; }
-  loadSession(sess);
-}
-
-function loadSession(sess) {
-  currentSession = sess;
-  navigateSession(sess);
-  document.getElementById('tabBar').style.display = 'flex';
-}
-
-// ──────────────────────────────────────────────
-// NAVIGATE
-// ──────────────────────────────────────────────
-let navMap = null;
-
-function navigateSession(sess) {
-  navPinIndex = 0;
-  showView('viewNavigate');
-
-  // Header
-  document.getElementById('sessionHeaderNav').innerHTML = `
-    <div class="session-header">
-      <div>
-        <div class="session-name">${sess.name}</div>
-        <div style="font-size:0.7rem;color:var(--muted);font-family:'Space Mono',monospace;margin-top:2px;">${sess.pins.length} pin${sess.pins.length!==1?'s':''}</div>
+      <div style={{ padding: "20px 20px 32px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
+        {!pinsLoaded ? (
+          <div style={{ textAlign: "center", color: "rgba(224,216,200,0.4)", padding: 40, fontFamily: "'Orbitron',monospace", fontSize: 12 }}>LOADING…</div>
+        ) : myPins.length === 0 ? (
+          <div style={{ textAlign: "center", padding: 60 }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>📍</div>
+            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 12, color: "rgba(224,216,200,0.4)", letterSpacing: 2 }}>NO PINS YET</div>
+            <div style={{ color: "rgba(224,216,200,0.3)", fontSize: 13, marginTop: 8 }}>Create your first pin to share with friends</div>
+            <button style={{ ...s.btn("ghost"), marginTop: 20 }} onClick={() => { resetCreate(); setScreen("create"); }}>+ CREATE PIN</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 12, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.5)" }}>{myPins.length} PIN{myPins.length !== 1 ? "S" : ""}</div>
+              <button style={{ ...s.btn("ghost"), padding: "6px 14px", fontSize: 12 }} onClick={() => { resetCreate(); setScreen("create"); }}>+ NEW PIN</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {myPins.map((p) => {
+                const expired = p.expiresAt < Date.now();
+                const remaining = p.expiresAt - Date.now();
+                return (
+                  <div key={p.code} style={{
+                    ...s.card, opacity: expired ? 0.45 : 1,
+                    border: `1px solid ${expired ? "rgba(255,100,100,0.15)" : p.cat?.c + "33" || "rgba(212,136,42,0.15)"}`,
+                    cursor: expired ? "default" : "pointer",
+                    transition: "border 0.2s"
+                  }}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                      <div style={{ fontSize: 24, marginTop: 2 }}>{p.cat?.e}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.msg}</div>
+                        <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 14, color: "#f5a623", letterSpacing: 4, marginBottom: 6 }}>{p.code}</div>
+                        <div style={{ fontSize: 12, color: expired ? "#ff6644" : "rgba(224,216,200,0.45)", fontFamily: "'Orbitron',monospace" }}>
+                          {expired ? "EXPIRED" : `expires in ${fmtTime(remaining)}`}
+                        </div>
+                      </div>
+                      {!expired && (
+                        <button style={{ ...s.btn("ghost"), padding: "6px 12px", fontSize: 11, flexShrink: 0 }}
+                          onClick={() => copy(p.code)}>
+                          COPY
+                        </button>
+                      )}
+                    </div>
+                    {!expired && (
+                      <button style={{ ...s.btn("primary"), width: "100%", marginTop: 10, padding: "10px", fontSize: 13 }}
+                        onClick={() => handleNav(p.code)}>
+                        NAVIGATE →
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
-      <div class="session-code" onclick="copySessionCode()">${sess.pins.length} pins</div>
-    </div>`;
+    </div>
+  );
 
-  // Pin selector tabs
-  document.getElementById('navPinSelector').innerHTML = `
-    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
-      ${sess.pins.map((p,i) => `
-        <button onclick="selectNavPin(${i})" id="navTab${i}" style="
-          flex-shrink:0;padding:8px 14px;border-radius:8px;
-          background:${i===0?CAT_COLOR[p.cat]:'var(--surface2)'};
-          color:${i===0?'var(--bg)':'var(--muted)'};
-          border:1px solid ${i===0?CAT_COLOR[p.cat]:'var(--border)'};
-          font-family:'Space Mono',monospace;font-size:0.72rem;cursor:pointer;
-          white-space:nowrap;transition:all 0.2s;">
-          ${CAT_EMOJI[p.cat]} Pin ${i+1}
-        </button>`).join('')}
-    </div>`;
-
-  // All pins list
-  document.getElementById('navAllPins').innerHTML = sess.pins.map((p,i) => pinCardHTML(p, i, false)).join('');
-
-  initNavMap();
-  selectNavPin(0);
-  updateNavigation();
-
-  // Start device compass for navigation
-  if (!usingDeviceCompass) {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      DeviceOrientationEvent.requestPermission().then(s => { if(s==='granted') { usingDeviceCompass = true; window.addEventListener('deviceorientationabsolute', handleNavOrientation, true); window.addEventListener('deviceorientation', handleNavOrientation, true); }});
-    } else {
-      window.addEventListener('deviceorientationabsolute', handleNavOrientation, true);
-      window.addEventListener('deviceorientation', handleNavOrientation, true);
-    }
-  }
+  return null;
 }
-
-function handleNavOrientation(e) {
-  let heading = null;
-  if (e.absolute && e.alpha !== null) heading = (360 - e.alpha) % 360;
-  else if (e.webkitCompassHeading) heading = e.webkitCompassHeading;
-  if (heading !== null) { deviceHeading = heading; drawNavCompass(); }
-}
-
-function selectNavPin(i) {
-  navPinIndex = i;
-  if (!currentSession) return;
-  const pins = currentSession.pins;
-
-  // Update tab styles
-  pins.forEach((p, j) => {
-    const btn = document.getElementById('navTab' + j);
-    if (!btn) return;
-    if (j === i) {
-      btn.style.background = CAT_COLOR[p.cat];
-      btn.style.color = 'var(--bg)';
-      btn.style.borderColor = CAT_COLOR[p.cat];
-    } else {
-      btn.style.background = 'var(--surface2)';
-      btn.style.color = 'var(--muted)';
-      btn.style.borderColor = 'var(--border)';
-    }
-  });
-
-  updateNavigation();
-}
-
-function updateNavigation() {
-  if (!currentSession) return;
-  const pin = currentSession.pins[navPinIndex];
-  if (!pin) return;
-
-  // Check expiry
-  if (pin.expiry && Date.now() > pin.expiry) {
-    document.getElementById('navDistance').textContent = 'EXPIRED';
-    document.getElementById('navBearing').textContent = '';
-    document.getElementById('navMsg').textContent = 'This pin has expired';
-    return;
-  }
-
-  let dist = null, bearing = null;
-  if (myLat !== null) {
-    dist = haversine(myLat, myLng, pin.lat, pin.lng);
-    bearing = bearingTo(myLat, myLng, pin.lat, pin.lng);
-  }
-
-  document.getElementById('navDistance').textContent = dist !== null ? formatDist(dist) : '— (No GPS)';
-  document.getElementById('navBearing').textContent = bearing !== null
-    ? `Bearing ${String(Math.round(bearing)).padStart(3,'0')}° ${bearingLabel(bearing)} · ${formatETA(dist || 0)}`
-    : 'Acquire GPS to get bearing';
-  document.getElementById('navMsg').textContent = pin.msg;
-
-  drawNavCompass(bearing);
-  updateMapForPin(pin, bearing, dist);
-}
-
-function drawNavCompass(bearingToDest) {
-  const canvas = document.getElementById('navCanvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const cx = 110, cy = 110, r = 100;
-
-  ctx.clearRect(0, 0, 220, 220);
-
-  // Outer circles
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-  ctx.strokeStyle = '#1e3048'; ctx.lineWidth = 2; ctx.stroke();
-
-  ctx.beginPath(); ctx.arc(cx, cy, r - 15, 0, Math.PI*2);
-  ctx.strokeStyle = 'rgba(0,212,255,0.15)'; ctx.lineWidth = 1; ctx.stroke();
-
-  // Tick marks
-  for (let i = 0; i < 360; i += 10) {
-    const rad = toRad(i - 90);
-    const inner = i % 90 === 0 ? r - 20 : i % 30 === 0 ? r - 14 : r - 8;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(rad) * inner, cy + Math.sin(rad) * inner);
-    ctx.lineTo(cx + Math.cos(rad) * (r - 3), cy + Math.sin(rad) * (r - 3));
-    ctx.strokeStyle = i % 90 === 0 ? '#00d4ff' : '#1e3048';
-    ctx.lineWidth = i % 90 === 0 ? 2 : 1;
-    ctx.stroke();
-  }
-
-  // Cardinals
-  [['N',0,'#00d4ff'],['E',90,'#4a7a99'],['S',180,'#4a7a99'],['W',270,'#4a7a99']].forEach(([l,d,c]) => {
-    ctx.fillStyle = c;
-    ctx.font = 'bold 12px Space Mono, monospace';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const rad = toRad(d - 90);
-    ctx.fillText(l, cx + Math.cos(rad) * (r - 28), cy + Math.sin(rad) * (r - 28));
-  });
-
-  // Device heading indicator (blue)
-  if (deviceHeading !== null) {
-    const hRad = toRad(deviceHeading - 90);
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(hRad) * (r - 3), cy + Math.sin(hRad) * (r - 3));
-    ctx.lineTo(cx + Math.cos(hRad) * (r - 18), cy + Math.sin(hRad) * (r - 18));
-    ctx.strokeStyle = 'rgba(0,212,255,0.5)';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-  }
-
-  // Destination arrow (orange, large)
-  if (bearingToDest !== null && bearingToDest !== undefined) {
-    const bRad = toRad(bearingToDest - 90);
-    const adjBearing = deviceHeading !== null ? bearingToDest - deviceHeading : bearingToDest;
-    const aRad = toRad(adjBearing - 90);
-    const alen = r - 25;
-
-    ctx.shadowColor = '#ff6b35';
-    ctx.shadowBlur = 12;
-
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(aRad) * alen, cy + Math.sin(aRad) * alen);
-    ctx.lineTo(cx + Math.cos(aRad + Math.PI/2) * 10, cy + Math.sin(aRad + Math.PI/2) * 10);
-    ctx.lineTo(cx - Math.cos(aRad) * 25, cy - Math.sin(aRad) * 25);
-    ctx.lineTo(cx + Math.cos(aRad - Math.PI/2) * 10, cy + Math.sin(aRad - Math.PI/2) * 10);
-    ctx.closePath();
-    ctx.fillStyle = '#ff6b35';
-    ctx.fill();
-
-    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-  }
-
-  // Center
-  ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2);
-  ctx.fillStyle = '#0d1520'; ctx.fill();
-  ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 2; ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2);
-  ctx.fillStyle = '#00d4ff'; ctx.fill();
-}
-
-// ──────────────────────────────────────────────
-// MAP
-// ──────────────────────────────────────────────
-function initNavMap() {
-  if (navMap) { navMap.remove(); navMap = null; }
-  const container = document.getElementById('mapContainer');
-
-  navMap = L.map('mapContainer', { zoomControl: true, attributionControl: false }).setView([20, 0], 2);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(navMap);
-
-  pinMarkers = [];
-  if (currentSession) {
-    currentSession.pins.forEach((p, i) => {
-      const color = { meet: '#39ff14', look: '#00d4ff', caution: '#ffcc00', party: '#ff6b35' }[p.cat];
-      const icon = L.divIcon({
-        html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px ${color}"></div>`,
-        iconSize: [14, 14], iconAnchor: [7, 7], className: ''
-      });
-      const marker = L.marker([p.lat, p.lng], { icon }).addTo(navMap);
-      marker.bindPopup(`<b>${CAT_EMOJI[p.cat]} Pin ${i+1}</b><br>${p.msg}`);
-      pinMarkers.push(marker);
-    });
-    fitMapToPins();
-  }
-}
-
-function fitMapToPins() {
-  if (!navMap || !currentSession || !currentSession.pins.length) return;
-  const coords = currentSession.pins.map(p => [p.lat, p.lng]);
-  if (myLat) coords.push([myLat, myLng]);
-  const bounds = L.latLngBounds(coords);
-  navMap.fitBounds(bounds, { padding: [30, 30] });
-}
-
-function updateUserMapMarker() {
-  if (!navMap || myLat === null) return;
-  const icon = L.divIcon({
-    html: `<div style="background:#00d4ff;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 10px #00d4ff"></div>`,
-    iconSize: [12, 12], iconAnchor: [6, 6], className: ''
-  });
-  if (userMarker) navMap.removeLayer(userMarker);
-  userMarker = L.marker([myLat, myLng], { icon }).addTo(navMap);
-}
-
-function updateMapForPin(pin, bearing, dist) {
-  if (!navMap) return;
-  // Pan to show both user and pin
-  if (myLat !== null) {
-    const bounds = L.latLngBounds([[myLat, myLng], [pin.lat, pin.lng]]);
-    navMap.fitBounds(bounds, { padding: [40, 40] });
-  } else {
-    navMap.setView([pin.lat, pin.lng], 15);
-  }
-}
-
-// ──────────────────────────────────────────────
-// PROXIMITY ALERTS
-// ──────────────────────────────────────────────
-function checkProximity() {
-  if (!currentSession || !myLat) return;
-  currentSession.pins.forEach((pin, i) => {
-    if (!pin.prox) return;
-    const dist = haversine(myLat, myLng, pin.lat, pin.lng);
-    if (dist <= pin.prox && !proximityTimers[pin.id]) {
-      proximityTimers[pin.id] = true;
-      const badge = document.getElementById('proxBadge');
-      badge.textContent = `${CAT_EMOJI[pin.cat]} ${formatDist(dist)} from "${pin.msg.substring(0,20)}..."`;
-      badge.style.display = 'block';
-      badge.style.background = CAT_COLOR[pin.cat];
-      if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-      setTimeout(() => { badge.style.display = 'none'; delete proximityTimers[pin.id]; }, 5000);
-    }
-  });
-}
-
-// ──────────────────────────────────────────────
-// INIT & URL HANDLING
-// ──────────────────────────────────────────────
-window.addEventListener('load', () => {
-  startGPS();
-
-  // Check URL hash for session code
-  const hash = window.location.hash.substring(1);
-  if (hash.length > 20) {
-    const sess = decodeSession(hash);
-    if (sess) {
-      showToast('Loading shared session…');
-      setTimeout(() => loadSession(sess), 500);
-      return;
-    }
-  }
-
-  // Nav interval
-  setInterval(() => {
-    if (currentSession && document.getElementById('viewNavigate').classList.contains('active')) {
-      updateNavigation();
-    }
-  }, 2000);
-});
-
-// Redraw nav compass on orientation change
-window.addEventListener('resize', () => {
-  if (navMap) navMap.invalidateSize();
-});
-</script>
-</body>
-</html>
