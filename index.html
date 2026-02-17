@@ -1,733 +1,999 @@
-import { useState, useEffect, useRef } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PointMe</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg: #090b0f;
+    --surface: #111520;
+    --surface2: #171d2c;
+    --border: #1e2a40;
+    --border2: #2a3855;
+    --north: #e84040;
+    --target: #f5a623;
+    --gps: #00d4aa;
+    --text: #dce8f5;
+    --muted: #4a607a;
+    --dim: #263347;
+    --success: #22c97e;
+  }
+  *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Outfit', sans-serif; background: var(--bg); color: var(--text); }
 
-// ── Geo Utils ──────────────────────────────────────────────────
-function generateCode() {
-  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let a = "", b = "";
-  for (let i = 0; i < 4; i++) { a += c[~~(Math.random() * c.length)]; b += c[~~(Math.random() * c.length)]; }
-  return a + "-" + b;
-}
-function haverDist(a, b, c, d) {
-  const R = 6371000, p1 = a * Math.PI / 180, p2 = c * Math.PI / 180;
-  const dp = (c - a) * Math.PI / 180, dl = (d - b) * Math.PI / 180;
-  const x = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-}
-function calcBear(a, b, c, d) {
-  const dl = (d - b) * Math.PI / 180, p1 = a * Math.PI / 180, p2 = c * Math.PI / 180;
-  return (Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) * 180 / Math.PI + 360) % 360;
-}
-function destPt(lat, lon, brng, d) {
-  const R = 6371000, δ = d / R, θ = brng * Math.PI / 180, p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
-  const p2 = Math.asin(Math.sin(p1) * Math.cos(δ) + Math.cos(p1) * Math.sin(δ) * Math.cos(θ));
-  const l2 = l1 + Math.atan2(Math.sin(θ) * Math.sin(δ) * Math.cos(p1), Math.cos(δ) - Math.sin(p1) * Math.sin(p2));
-  return [p2 * 180 / Math.PI, l2 * 180 / Math.PI];
-}
-function fmtDist(m) { return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`; }
-function cardDir(b) { return ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(b / 22.5) % 16]; }
-function fmtTime(ms) {
-  const h = ms / 3600000;
-  if (h > 48) return `${Math.floor(h / 24)}d`;
-  if (h > 1) return `${Math.floor(h)}h`;
-  return `${Math.round(h * 60)}m`;
-}
+  .page { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+  .page.active { opacity: 1; pointer-events: all; }
 
-// ── Constants ─────────────────────────────────────────────────
-const CATS = [
-  { e: "📍", l: "General", c: "#f5a623" }, { e: "🎉", l: "Party", c: "#ff6bbd" },
-  { e: "🍕", l: "Food", c: "#ff8c42" },    { e: "⚠️", l: "Alert", c: "#ff4466" },
-  { e: "💎", l: "Treasure", c: "#7fdbff" }, { e: "🏠", l: "Home", c: "#77dd77" },
-  { e: "🚗", l: "Meet Up", c: "#aab8ff" }, { e: "🎯", l: "Target", c: "#ffdd44" },
-];
+  /* HOME */
+  #pgHome { align-items: center; justify-content: center; gap: 0; background: radial-gradient(ellipse 80% 60% at 50% 20%, #0d1b30 0%, var(--bg) 70%); }
+  .home-glow { position: absolute; width: 300px; height: 300px; border-radius: 50%; background: radial-gradient(circle, rgba(245,166,35,0.08) 0%, transparent 70%); top: 50px; left: 50%; transform: translateX(-50%); pointer-events: none; }
+  .logo { font-size: 2.8rem; font-weight: 900; letter-spacing: -2px; line-height: 1; margin-bottom: 6px; }
+  .logo em { color: var(--target); font-style: normal; }
+  .tagline { font-size: 0.88rem; color: var(--muted); text-align: center; line-height: 1.7; margin-bottom: 44px; max-width: 280px; }
+  .home-btns { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 10px; padding: 0 24px; }
+  .home-icon { font-size: 5rem; margin-bottom: 16px; filter: drop-shadow(0 0 24px rgba(245,166,35,0.35)); }
 
-// ── Compass SVG ────────────────────────────────────────────────
-function CompassRose({ bearing, size = 200, showCardinals = true, label = null }) {
-  const needleAngle = bearing ?? 0;
-  return (
-    <div style={{ position: "relative", width: size, height: size, filter: "drop-shadow(0 0 18px rgba(212,136,42,0.35))" }}>
-      <svg width={size} height={size} viewBox="0 0 200 200">
-        {/* Rings */}
-        {[98, 88, 70].map((r, i) => (
-          <circle key={i} cx="100" cy="100" r={r}
-            fill="none" stroke={i === 0 ? "rgba(212,136,42,0.5)" : i === 1 ? "rgba(212,136,42,0.2)" : "rgba(212,136,42,0.1)"}
-            strokeWidth={i === 0 ? 1.5 : 1} />
-        ))}
-        {/* Tick marks */}
-        {Array.from({ length: 72 }).map((_, i) => {
-          const angle = i * 5, rad = angle * Math.PI / 180;
-          const isMajor = angle % 90 === 0, isMed = angle % 45 === 0, isSm = angle % 15 === 0;
-          const r1 = 98, r2 = isMajor ? 82 : isMed ? 86 : isSm ? 89 : 93;
-          return (
-            <line key={i}
-              x1={100 + r1 * Math.sin(rad)} y1={100 - r1 * Math.cos(rad)}
-              x2={100 + r2 * Math.sin(rad)} y2={100 - r2 * Math.cos(rad)}
-              stroke={isMajor ? "rgba(212,136,42,0.8)" : "rgba(212,136,42,0.3)"}
-              strokeWidth={isMajor ? 1.5 : 0.8} />
-          );
-        })}
-        {/* Cardinal labels */}
-        {showCardinals && [["N", 0], ["E", 90], ["S", 180], ["W", 270]].map(([l, a]) => {
-          const rad = a * Math.PI / 180, r = 75;
-          return <text key={l} x={100 + r * Math.sin(rad)} y={100 - r * Math.cos(rad) + 4.5}
-            textAnchor="middle" fill={l === "N" ? "#f5a623" : "rgba(212,136,42,0.6)"}
-            fontSize="11" fontFamily="'Orbitron',monospace" fontWeight="700">{l}</text>;
-        })}
-        {/* Center dot */}
-        <circle cx="100" cy="100" r="5" fill="#f5a623" opacity="0.9" />
-        <circle cx="100" cy="100" r="2.5" fill="#fff" />
-        {/* Needle */}
-        <g transform={`rotate(${needleAngle} 100 100)`}>
-          <polygon points="100,18 95,100 100,108 105,100" fill="#f5a623" opacity="0.95" />
-          <polygon points="100,108 95,100 100,185 105,100" fill="#3a4a5a" />
-          <polygon points="100,18 95,100 100,108 105,100" fill="none" stroke="rgba(255,220,150,0.5)" strokeWidth="0.5" />
-        </g>
-      </svg>
-      {label && (
-        <div style={{ position: "absolute", bottom: -28, width: "100%", textAlign: "center",
-          fontFamily: "'Orbitron',monospace", fontSize: 11, color: "#f5a623", letterSpacing: 2 }}>
-          {label}
+  /* BUTTONS */
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 14px; border: none; cursor: pointer; font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600; transition: all 0.15s; width: 100%; }
+  .btn-primary { background: var(--target); color: #0a0c10; }
+  .btn-primary:active { background: #d4901f; transform: scale(0.98); }
+  .btn-outline { background: transparent; color: var(--text); border: 1.5px solid var(--border2); }
+  .btn-ghost { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); font-size: 0.88rem; padding: 10px 16px; }
+  .btn-sm { width: auto; padding: 9px 16px; font-size: 0.85rem; border-radius: 10px; }
+
+  /* TOPBAR */
+  .topbar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .topbar-back { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; padding: 0 6px 0 0; line-height: 1; }
+  .topbar-title { flex: 1; font-size: 1.1rem; font-weight: 700; }
+  .gps-badge { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 500; padding: 4px 9px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); }
+  .gps-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .gps-badge.good { border-color: rgba(34,201,126,0.4); color: var(--success); }
+  .gps-badge.good .dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .gps-badge.ok { border-color: rgba(245,166,35,0.4); color: var(--target); }
+  .gps-badge.ok .dot { background: var(--target); }
+  .gps-badge.bad { border-color: rgba(232,64,64,0.3); color: #e84040; }
+  .gps-badge.bad .dot { background: #e84040; }
+
+  /* TABS */
+  .tab-bar { display: flex; gap: 4px; padding: 6px; background: var(--surface2); border-radius: 12px; margin: 12px 16px 0; border: 1px solid var(--border); flex-shrink: 0; }
+  .tab { flex: 1; padding: 9px 6px; text-align: center; font-size: 0.88rem; font-weight: 600; color: var(--muted); border-radius: 9px; cursor: pointer; transition: all 0.2s; border: none; background: none; }
+  .tab.active { background: var(--surface); color: var(--text); }
+
+  /* COMPASS LEGEND */
+  .compass-legend { display: flex; align-items: center; justify-content: center; gap: 20px; padding: 10px 0 0; flex-shrink: 0; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--muted); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-sep { width: 1px; height: 12px; background: var(--border2); border-radius: 1px; }
+
+  /* COMPASS CANVAS */
+  .compass-container { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 0; }
+
+  /* SENSOR PILLS */
+  .sensor-bar { display: flex; gap: 8px; padding: 8px 16px; flex-shrink: 0; }
+  .sensor-pill { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 10px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: var(--surface2); color: var(--muted); transition: all 0.2s; user-select: none; }
+  .sensor-pill.on { border-color: var(--target); color: var(--target); background: rgba(245,166,35,0.08); }
+
+  /* SCROLL BODY */
+  .scroll-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .scroll-body::-webkit-scrollbar { display: none; }
+
+  /* FORM */
+  .form-block { padding: 14px 16px; }
+  .field-label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; display: block; margin-bottom: 6px; }
+  .field-input { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); color: var(--text); padding: 11px 14px; border-radius: 10px; font-family: 'Outfit', sans-serif; font-size: 0.95rem; outline: none; }
+  .field-input:focus { border-color: var(--target); }
+  .field-input::placeholder { color: var(--muted); }
+  textarea.field-input { resize: none; height: 76px; line-height: 1.5; }
+  select.field-input { appearance: none; cursor: pointer; }
+  select.field-input option { background: var(--surface); }
+  .field-row { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .field { margin-bottom: 12px; }
+
+  /* CATEGORY */
+  .cat-row { display: flex; gap: 8px; }
+  .cat-pill { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface2); cursor: pointer; transition: all 0.2s; }
+  .cat-pill .ei { font-size: 1.3rem; }
+  .cat-pill .el { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+  .cat-pill.active { border-color: var(--target); background: rgba(245,166,35,0.1); }
+  .cat-pill.active .el { color: var(--target); }
+
+  /* ALTITUDE */
+  .alt-section { padding: 0 16px 14px; }
+  .alt-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .alt-value { font-size: 1rem; font-weight: 700; color: var(--target); }
+  .alt-track { height: 44px; background: var(--surface2); border: 1px solid var(--border); border-radius: 22px; position: relative; overflow: hidden; touch-action: none; cursor: pointer; }
+  .alt-fill { position: absolute; height: 6px; top: 50%; transform: translateY(-50%); background: var(--target); border-radius: 3px; pointer-events: none; }
+  .alt-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 2px; height: 18px; background: var(--border2); border-radius: 1px; pointer-events: none; }
+  .alt-thumb { position: absolute; top: 50%; width: 34px; height: 34px; border-radius: 50%; background: var(--target); border: 3px solid var(--bg); box-shadow: 0 2px 10px rgba(0,0,0,0.5); transform: translate(-50%,-50%); pointer-events: none; }
+  .alt-ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); padding: 4px 6px 0; }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: var(--border); margin: 4px 16px 12px; }
+  .section-label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; padding: 0 16px; margin-bottom: 10px; }
+
+  /* PIN CARDS */
+  .pin-card { display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
+  .pin-emoji { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; background: var(--surface2); flex-shrink: 0; }
+  .pin-info { flex: 1; min-width: 0; }
+  .pin-cat { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+  .pin-msg { font-size: 0.88rem; color: var(--text); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pin-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 5px; background: var(--dim); color: var(--muted); }
+  .chip.t { color: var(--target); }
+  .chip.n { color: var(--north); }
+  .chip.g { color: var(--gps); }
+  .pin-del { background: none; border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; margin-top: 4px; }
+  .pin-nav-btn { background: rgba(245,166,35,0.1); border: 1px solid var(--target); color: var(--target); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; margin-top: 4px; }
+
+  /* BOTTOM ACTION */
+  .bottom-action { padding: 10px 16px 14px; border-top: 1px solid var(--border); display: flex; gap: 10px; flex-shrink: 0; background: var(--bg); }
+
+  /* MAP */
+  .map-wrap { margin: 0 16px 14px; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); position: relative; }
+  .map-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(9,11,15,0.85); border: 1px solid var(--border2); border-radius: 20px; padding: 5px 14px; font-size: 0.75rem; color: var(--text); z-index: 500; white-space: nowrap; pointer-events: none; backdrop-filter: blur(6px); }
+
+  /* NAVIGATE */
+  #pgNav { background: var(--bg); }
+  .nav-pin-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; flex-shrink: 0; scrollbar-width: none; }
+  .nav-pin-scroll::-webkit-scrollbar { display: none; }
+  .nav-pin-btn { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--muted); font-family: 'Outfit', sans-serif; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .nav-pin-btn.active { border-color: var(--target); color: var(--target); background: rgba(245,166,35,0.08); }
+
+  .nav-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 6px 16px 10px; flex-shrink: 0; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px; text-align: center; }
+  .stat-l { font-size: 0.65rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+  .stat-v { font-size: 1.1rem; font-weight: 700; line-height: 1; }
+  .stat-v.t { color: var(--target); }
+  .stat-v.g { color: var(--gps); }
+
+  /* ALT VIEWER */
+  .alt-viewer { display: flex; align-items: center; gap: 12px; margin: 0 16px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; flex-shrink: 0; }
+  .alt-viewer-text .lbl { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px; }
+  .alt-viewer-text .val { font-size: 1.4rem; font-weight: 700; color: var(--target); }
+  .alt-viewer-text .desc { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
+  /* NAV MSG */
+  .nav-msg-box { margin: 0 16px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 13px; flex-shrink: 0; }
+  .nav-msg-label { font-size: 0.68rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; }
+
+  /* GPS FIX */
+  .gps-fix-box { margin: 0 16px 10px; background: rgba(0,212,170,0.06); border: 1px solid rgba(0,212,170,0.2); border-radius: 12px; padding: 13px; flex-shrink: 0; }
+  .gps-fix-title { font-size: 0.72rem; font-weight: 700; color: var(--gps); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; }
+  .gps-fix-desc { font-size: 0.82rem; color: var(--muted); line-height: 1.55; margin-bottom: 8px; }
+
+  /* SHARE */
+  .share-card { margin: 16px; background: var(--surface); border: 1.5px solid var(--target); border-radius: 16px; padding: 20px; text-align: center; }
+  .share-label { font-size: 0.7rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  .share-url { font-size: 0.82rem; color: var(--target); word-break: break-all; line-height: 1.5; margin-bottom: 14px; }
+  .share-btns { display: flex; gap: 8px; justify-content: center; }
+
+  /* JOIN */
+  #pgJoin { align-items: center; justify-content: center; padding: 32px 24px; gap: 14px; background: var(--bg); }
+  .join-input { width: 100%; max-width: 360px; background: var(--surface2); border: 2px solid var(--border2); color: var(--target); padding: 16px; border-radius: 12px; font-family: 'Outfit', sans-serif; font-size: 1rem; text-align: center; letter-spacing: 2px; outline: none; }
+  .join-input:focus { border-color: var(--target); }
+
+  /* TOAST */
+  .toast { position: fixed; top: 70px; left: 50%; transform: translateX(-50%) translateY(-8px); background: var(--surface); border: 1px solid var(--border2); color: var(--text); padding: 10px 20px; border-radius: 10px; font-size: 0.88rem; font-weight: 500; z-index: 9999; opacity: 0; pointer-events: none; transition: all 0.25s; white-space: nowrap; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { border-color: var(--north); color: var(--north); }
+
+  /* PROX ALERT */
+  .prox-alert { position: fixed; bottom: 24px; left: 16px; right: 16px; background: var(--success); color: #060f0c; border-radius: 14px; padding: 14px 18px; font-size: 0.95rem; font-weight: 700; z-index: 9998; display: none; text-align: center; animation: slideUp 0.3s ease; }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .leaflet-tile { filter: brightness(0.7) saturate(0.9); }
+  .empty { text-align: center; padding: 30px 16px; color: var(--muted); font-size: 0.88rem; line-height: 2; }
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<div class="page active" id="pgHome">
+  <div class="home-glow"></div>
+  <div class="home-icon">🧭</div>
+  <div class="logo">Point<em>Me</em></div>
+  <p class="tagline">Point your phone, share the direction.<br>Friends navigate from wherever they are.</p>
+  <div class="home-btns">
+    <button class="btn btn-primary" onclick="App.goCreate()">+ Create &amp; Share Pins</button>
+    <button class="btn btn-outline" onclick="App.goJoin()">🔗 Join with Code</button>
+  </div>
+</div>
+
+<!-- CREATE -->
+<div class="page" id="pgCreate">
+  <div class="topbar">
+    <button class="topbar-back" onclick="App.goHome()">←</button>
+    <span class="topbar-title">Create Pins</span>
+    <div class="gps-badge" id="cGpsBadge"><div class="dot"></div><span id="cGpsText">—</span></div>
+  </div>
+  <div class="tab-bar">
+    <button class="tab active" id="tabCompass" onclick="App.setTab('compass')">🧭 Point Direction</button>
+    <button class="tab" id="tabMap" onclick="App.setTab('map')">🗺 Drop on Map</button>
+  </div>
+  <div class="scroll-body">
+    <!-- COMPASS PANEL -->
+    <div id="panelCompass">
+      <div class="compass-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--north)"></div> North</div>
+        <div class="legend-sep"></div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--target)"></div> Your Direction</div>
+      </div>
+      <div class="compass-container">
+        <canvas id="cCanvas" width="260" height="260" style="touch-action:none;display:block"></canvas>
+      </div>
+      <div class="sensor-bar">
+        <div class="sensor-pill on" id="compassPill" onclick="Compass.toggleLock()">
+          <span>🧭</span><span id="compassPillText">Following Phone</span>
         </div>
-      )}
+        <div class="sensor-pill" id="tiltPill" onclick="Tilt.toggle()">
+          <span>📐</span><span id="tiltPillText">Enable Tilt</span>
+        </div>
+      </div>
+      <div class="alt-section">
+        <div class="alt-label-row">
+          <span class="field-label" style="margin:0">Vertical Angle</span>
+          <span class="alt-value" id="altLabel">0°</span>
+        </div>
+        <div class="alt-track" id="altTrack">
+          <div class="alt-fill" id="altFill"></div>
+          <div class="alt-center"></div>
+          <div class="alt-thumb" id="altThumb"></div>
+        </div>
+        <div class="alt-ends"><span>↙ Down −90°</span><span>Horizontal</span><span>↗ Up +90°</span></div>
+      </div>
     </div>
-  );
+    <!-- MAP PANEL -->
+    <div id="panelMap" style="display:none;padding:12px 0 0">
+      <div class="map-wrap">
+        <div class="map-hint" id="createMapHint">👆 Tap map to place pin</div>
+        <div id="createMapEl" style="height:320px"></div>
+      </div>
+    </div>
+    <!-- FORM -->
+    <div class="divider"></div>
+    <div class="form-block">
+      <div class="field">
+        <label class="field-label">Message</label>
+        <textarea class="field-input" id="pinMsg" placeholder="e.g. I'm at the blue gate — call when close!"></textarea>
+      </div>
+      <div class="field" id="distFieldWrap">
+        <label class="field-label">Distance to target (optional)</label>
+        <div class="field-row">
+          <input class="field-input" type="number" id="pinDist" placeholder="e.g. 200" min="1">
+          <select class="field-input" id="pinUnit">
+            <option value="m">metres</option>
+            <option value="km">km</option>
+            <option value="mi">miles</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Category</label>
+        <div class="cat-row">
+          <div class="cat-pill active" data-cat="meet" onclick="App.setCat(this)"><span class="ei">📍</span><span class="el">Meet</span></div>
+          <div class="cat-pill" data-cat="look" onclick="App.setCat(this)"><span class="ei">👁</span><span class="el">Look</span></div>
+          <div class="cat-pill" data-cat="caution" onclick="App.setCat(this)"><span class="ei">⚠️</span><span class="el">Caution</span></div>
+          <div class="cat-pill" data-cat="party" onclick="App.setCat(this)"><span class="ei">🎉</span><span class="el">Party</span></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field" style="margin:0">
+          <label class="field-label">Expiry</label>
+          <select class="field-input" id="pinExpiry">
+            <option value="0">Never</option>
+            <option value="60">1 hour</option>
+            <option value="180">3 hours</option>
+            <option value="720">12 hours</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label class="field-label">Alert at</label>
+          <select class="field-input" id="pinProx">
+            <option value="0">Off</option>
+            <option value="50">50 m</option>
+            <option value="100" selected>100 m</option>
+            <option value="250">250 m</option>
+            <option value="500">500 m</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">Pins Added <span id="pinCountLabel">(0)</span></div>
+    <div id="createPinList"></div>
+    <div class="empty" id="createEmpty">No pins yet — set direction above and tap Add Pin</div>
+  </div>
+  <div class="bottom-action">
+    <button class="btn btn-ghost btn-sm" style="flex:none" onclick="App.addPin()">＋ Add Pin</button>
+    <button class="btn btn-primary" onclick="App.share()">Create &amp; Share →</button>
+  </div>
+</div>
+
+<!-- SHARE -->
+<div class="page" id="pgShare">
+  <div class="topbar">
+    <button class="topbar-back" onclick="App.goHome()">←</button>
+    <span class="topbar-title">Share Session</span>
+  </div>
+  <div class="scroll-body">
+    <div class="share-card">
+      <div class="share-label">Send this link to friends</div>
+      <div class="share-url" id="shareUrl">—</div>
+      <div class="share-btns">
+        <button class="btn btn-primary btn-sm" onclick="App.copyLink()">📋 Copy Link</button>
+        <button class="btn btn-ghost btn-sm" onclick="App.nativeShare()">↗ Share</button>
+      </div>
+    </div>
+    <div class="section-label">Pins in this session</div>
+    <div id="sharePinList"></div>
+  </div>
+  <div class="bottom-action">
+    <button class="btn btn-ghost" onclick="App.goHome()">Home</button>
+    <button class="btn btn-primary" onclick="App.openNav()">🧭 Navigate →</button>
+  </div>
+</div>
+
+<!-- JOIN -->
+<div class="page" id="pgJoin">
+  <div class="topbar" style="position:absolute;top:0;left:0;right:0">
+    <button class="topbar-back" onclick="App.goHome()">←</button>
+    <span class="topbar-title">Join Session</span>
+  </div>
+  <div style="font-size:3.5rem;margin-top:60px">🔗</div>
+  <div style="font-size:1.4rem;font-weight:700;margin-bottom:6px">Enter Code</div>
+  <div style="font-size:0.85rem;color:var(--muted);text-align:center;max-width:290px;line-height:1.6;margin-bottom:6px">Paste the link or code your friend sent you</div>
+  <input class="join-input" id="joinInput" type="text" placeholder="PASTE LINK OR CODE" autocomplete="off" spellcheck="false">
+  <button class="btn btn-primary" style="max-width:340px;width:100%" onclick="App.join()">Open Session →</button>
+  <button class="btn btn-ghost" style="max-width:340px;width:100%" onclick="App.goHome()">Cancel</button>
+</div>
+
+<!-- NAVIGATE -->
+<div class="page" id="pgNav">
+  <div class="topbar">
+    <button class="topbar-back" onclick="App.goHome()">←</button>
+    <span class="topbar-title" id="navTitle">Navigate</span>
+    <div class="gps-badge" id="nGpsBadge"><div class="dot"></div><span id="nGpsText">—</span></div>
+  </div>
+  <div class="scroll-body" id="navBody">
+    <div class="nav-pin-scroll" id="navPinScroll"></div>
+    <div class="compass-legend" style="padding:4px 0 4px">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--north)"></div> North</div>
+      <div class="legend-sep"></div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--target)"></div> Look Here</div>
+    </div>
+    <div class="compass-container" style="padding:4px 0">
+      <canvas id="nCanvas" width="280" height="280" style="display:block"></canvas>
+    </div>
+    <div class="sensor-bar" style="padding:4px 16px">
+      <div class="sensor-pill on" id="navSensorPill"><span>📱</span><span id="navSensorText">Device Compass Active</span></div>
+    </div>
+    <div class="nav-stats">
+      <div class="stat"><div class="stat-l">Distance</div><div class="stat-v t" id="nDist">—</div></div>
+      <div class="stat"><div class="stat-l">Bearing</div><div class="stat-v" id="nBearing">—</div></div>
+      <div class="stat"><div class="stat-l">ETA Walk</div><div class="stat-v g" id="nETA">—</div></div>
+    </div>
+    <div class="alt-viewer" id="nAltViewer" style="display:none">
+      <canvas id="nAltArc" width="90" height="55" style="flex-shrink:0"></canvas>
+      <div class="alt-viewer-text">
+        <div class="lbl">Vertical Angle</div>
+        <div class="val" id="nAltVal">0°</div>
+        <div class="desc" id="nAltDesc">Look level</div>
+      </div>
+    </div>
+    <div class="nav-msg-box">
+      <div class="nav-msg-label">Message from sender</div>
+      <div id="nMsgText" style="font-size:0.9rem;line-height:1.55">—</div>
+    </div>
+    <div class="gps-fix-box" id="gpsFixBox">
+      <div class="gps-fix-title">📍 GPS poor or unavailable</div>
+      <div class="gps-fix-desc">Tap your approximate location on the map below — the compass will point from there to the target.</div>
+      <button class="btn btn-ghost btn-sm" onclick="Nav.enableManualTap()">📌 Tap Map to Set My Location</button>
+    </div>
+    <div class="map-wrap" id="nMapWrap">
+      <div class="map-hint" id="nMapHint" style="display:none">👆 Tap to set your location</div>
+      <div id="navMapEl" style="height:260px"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="section-label">All Pins</div>
+    <div id="navPinList" style="padding-bottom:16px"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="prox-alert" id="proxAlert"></div>
+
+<script>
+'use strict';
+
+// ─── UTILS ───
+const $ = id => document.getElementById(id);
+const RAD = Math.PI / 180, DEG = 180 / Math.PI;
+const toR = d => d * RAD, toD = r => r * DEG;
+const CARDS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const card = d => CARDS[Math.round(((d%360)+360)%360/22.5)%16];
+
+function haversine(a,b,c,d){
+  const R=6371000,dL=toR(c-a),dN=toR(d-b);
+  const x=Math.sin(dL/2)**2+Math.cos(toR(a))*Math.cos(toR(c))*Math.sin(dN/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function calcBearing(a,b,c,d){
+  const dN=toR(d-b),y=Math.sin(dN)*Math.cos(toR(c));
+  const x=Math.cos(toR(a))*Math.sin(toR(c))-Math.sin(toR(a))*Math.cos(toR(c))*Math.cos(dN);
+  return (toD(Math.atan2(y,x))+360)%360;
+}
+function destPoint(lat,lng,brg,dist){
+  const R=6371000,d=dist/R,b=toR(brg);
+  const la=Math.asin(Math.sin(toR(lat))*Math.cos(d)+Math.cos(toR(lat))*Math.sin(d)*Math.cos(b));
+  const ln=toR(lng)+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(toR(lat)),Math.cos(d)-Math.sin(toR(lat))*Math.sin(la));
+  return {lat:toD(la),lng:toD(ln)};
+}
+function fmtDist(m){return m<1000?Math.round(m)+' m':(m/1000).toFixed(1)+' km';}
+function fmtETA(m){const min=Math.ceil(m/80);return min<60?min+' min':Math.floor(min/60)+'h '+(min%60)+'m';}
+
+const CAT={meet:'📍',look:'👁',caution:'⚠️',party:'🎉'};
+const CATCOL={meet:'#00d4aa',look:'#f5a623',caution:'#ed8936',party:'#b794f4'};
+const enc=o=>btoa(encodeURIComponent(JSON.stringify(o)));
+const dec=s=>{try{return JSON.parse(decodeURIComponent(atob(s.trim())));}catch{return null;}};
+
+let _tt;
+function showToast(msg,err=false){
+  const el=$('toast');el.textContent=msg;
+  el.className='toast show'+(err?' err':'');
+  clearTimeout(_tt);_tt=setTimeout(()=>el.classList.remove('show'),2800);
+}
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $(id).classList.add('active');
 }
 
-// ── Navigation Arrow ──────────────────────────────────────────
-function NavArrow({ angle, size = 220 }) {
-  const hasAngle = angle != null;
-  return (
-    <div style={{ position: "relative", width: size, height: size }}>
-      {/* Outer ring glow */}
-      <div style={{
-        position: "absolute", inset: 0, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(245,166,35,0.08) 0%, transparent 70%)",
-        border: "1px solid rgba(245,166,35,0.25)",
-        animation: hasAngle ? "pulse 2s ease-in-out infinite" : "none"
-      }} />
-      <svg width={size} height={size} viewBox="0 0 220 220" style={{ filter: "drop-shadow(0 0 12px rgba(245,166,35,0.5))" }}>
-        {/* Rings */}
-        <circle cx="110" cy="110" r="105" fill="rgba(8,12,18,0.6)" stroke="rgba(245,166,35,0.3)" strokeWidth="1" />
-        <circle cx="110" cy="110" r="80" fill="none" stroke="rgba(245,166,35,0.1)" strokeWidth="1" strokeDasharray="4 8" />
-        {/* Cardinal dots */}
-        {[0, 90, 180, 270].map(a => {
-          const rad = a * Math.PI / 180;
-          return <circle key={a} cx={110 + 95 * Math.sin(rad)} cy={110 - 95 * Math.cos(rad)} r="3"
-            fill={a === 0 ? "#f5a623" : "rgba(245,166,35,0.3)"} />;
-        })}
-        {/* N label */}
-        <text x="110" y="7" textAnchor="middle" fill="#f5a623" fontSize="10" fontFamily="'Orbitron',monospace">N</text>
-        {/* Arrow */}
-        {hasAngle ? (
-          <g transform={`rotate(${angle} 110 110)`}>
-            <polygon points="110,22 103,110 110,124 117,110" fill="#f5a623" />
-            <polygon points="110,124 103,110 110,200 117,110" fill="rgba(200,150,50,0.3)" />
-            <circle cx="110" cy="110" r="7" fill="#f5a623" />
-            <circle cx="110" cy="110" r="3.5" fill="#fff" />
-          </g>
-        ) : (
-          <>
-            <circle cx="110" cy="110" r="10" fill="rgba(245,166,35,0.15)" stroke="rgba(245,166,35,0.4)" strokeWidth="1" />
-            <text x="110" y="115" textAnchor="middle" fill="rgba(245,166,35,0.5)" fontSize="9" fontFamily="'Orbitron',monospace">?</text>
-          </>
-        )}
-      </svg>
-    </div>
-  );
-}
+// ─── GPS ───
+const GPS={
+  lat:null,lng:null,acc:null,
+  start(){
+    if(!navigator.geolocation)return;
+    navigator.geolocation.watchPosition(p=>{
+      this.lat=p.coords.latitude;this.lng=p.coords.longitude;this.acc=p.coords.accuracy;
+      this._badge();
+      Nav.onGPS();
+    },()=>this._badge(),{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
+  },
+  _badge(){
+    [['cGpsBadge','cGpsText'],['nGpsBadge','nGpsText']].forEach(([b,t])=>{
+      const be=$(b),te=$(t);if(!be)return;
+      if(this.lat===null){be.className='gps-badge bad';te.textContent='No GPS';return;}
+      const lbl='±'+Math.round(this.acc)+'m';
+      if(this.acc<20){be.className='gps-badge good';te.textContent=lbl;}
+      else if(this.acc<100){be.className='gps-badge ok';te.textContent=lbl;}
+      else{be.className='gps-badge bad';te.textContent=lbl;}
+    });
+  }
+};
 
-// ── GPS Indicator ─────────────────────────────────────────────
-function GpsChip({ gps }) {
-  const acc = gps?.acc;
-  const color = !gps ? "#666" : acc < 15 ? "#44dd88" : acc < 50 ? "#f5a623" : "#ff6644";
-  const label = !gps ? "No GPS" : acc < 15 ? `±${acc}m ✓` : acc < 50 ? `±${acc}m ~` : `±${acc}m ✗`;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11,
-      fontFamily: "'Orbitron',monospace", color, opacity: 0.85 }}>
-      <div style={{ width: 7, height: 7, borderRadius: "50%", background: color,
-        boxShadow: `0 0 6px ${color}`, animation: gps ? "blink 1.5s ease-in-out infinite" : "none" }} />
-      {label}
-    </div>
-  );
-}
-
-// ── Main App ──────────────────────────────────────────────────
-export default function App() {
-  const [screen, setScreen] = useState("home");
-  const [gps, setGps] = useState(null);
-  const [devHead, setDevHead] = useState(null);
-
-  // Create state
-  const [cMode, setCMode] = useState("point");
-  const [locked, setLocked] = useState(false);
-  const [lockedBear, setLockedBear] = useState(0);
-  const [distVal, setDistVal] = useState("100");
-  const [distUnit, setDistUnit] = useState("m");
-  const [msg, setMsg] = useState("");
-  const [catIdx, setCatIdx] = useState(0);
-  const [expHrs, setExpHrs] = useState("24");
-  const [createdCode, setCreatedCode] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  // Navigate state
-  const [codeInput, setCodeInput] = useState("");
-  const [activePin, setActivePin] = useState(null);
-  const [navErr, setNavErr] = useState("");
-  const [navTarget, setNavTarget] = useState(null);
-  const [alerted, setAlerted] = useState(false);
-  const [arrived, setArrived] = useState(false);
-
-  // My pins
-  const [myPins, setMyPins] = useState([]);
-  const [pinsLoaded, setPinsLoaded] = useState(false);
-
-  // GPS
-  useEffect(() => {
-    if (!navigator.geolocation) return;
-    const id = navigator.geolocation.watchPosition(
-      p => setGps({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
-      () => {}, { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
-    );
-    return () => navigator.geolocation.clearWatch(id);
-  }, []);
-
-  // Compass
-  useEffect(() => {
-    const h = e => {
-      let v = null;
-      if (e.webkitCompassHeading != null) v = e.webkitCompassHeading;
-      else if (e.absolute && e.alpha != null) v = (360 - e.alpha + 360) % 360;
-      else if (e.alpha != null) v = (360 - e.alpha + 360) % 360;
-      if (v != null) setDevHead(Math.round(v));
+// ─── ORIENTATION ───
+const Orient={
+  heading:null,pitch:null,
+  _cbs:[],
+  active:false,
+  start(cb){
+    if(cb)this._cbs.push(cb);
+    if(this.active)return;
+    this.active=true;
+    const h=e=>{
+      // Heading
+      let head=null;
+      if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
+      else if(e.absolute&&typeof e.alpha==='number')head=(360-e.alpha)%360;
+      else if(typeof e.alpha==='number')head=(360-e.alpha)%360;
+      if(head!==null){
+        if(this.heading===null){this.heading=head;}
+        else{let d=head-this.heading;if(d>180)d-=360;if(d<-180)d+=360;this.heading=(this.heading+d*0.15+360)%360;}
+      }
+      // Pitch — beta: ~90 upright, <90 = forward tilt, >90 = back tilt
+      if(typeof e.beta==='number'){
+        const raw=e.beta-90;
+        this.pitch=this.pitch===null?raw:this.pitch+(raw-this.pitch)*0.2;
+      }
+      this._cbs.forEach(f=>f(this.heading,this.pitch));
     };
-    window.addEventListener("deviceorientationabsolute", h, true);
-    window.addEventListener("deviceorientation", h, true);
-    return () => {
-      window.removeEventListener("deviceorientationabsolute", h, true);
-      window.removeEventListener("deviceorientation", h, true);
-    };
-  }, []);
-
-  const currentBear = locked ? lockedBear : (devHead ?? 0);
-
-  // Nav calc
-  useEffect(() => {
-    if (!activePin) return;
-    if (activePin.mode === "here") setNavTarget({ lat: activePin.lat, lon: activePin.lon });
-    else {
-      const [lt, ln] = destPt(activePin.oLat, activePin.oLon, activePin.bear, activePin.distM);
-      setNavTarget({ lat: lt, lon: ln });
+    window.addEventListener('deviceorientationabsolute',h,true);
+    window.addEventListener('deviceorientation',h,true);
+  },
+  requestAndStart(cb){
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+      DeviceOrientationEvent.requestPermission().then(s=>{
+        if(s==='granted')this.start(cb);
+        else showToast('Compass permission denied — drag needle manually',true);
+      }).catch(()=>showToast('Could not get compass access',true));
+    } else {
+      this.start(cb);
     }
-  }, [activePin]);
+  }
+};
 
-  const navBear = navTarget && gps ? calcBear(gps.lat, gps.lon, navTarget.lat, navTarget.lon) : null;
-  const navDist = navTarget && gps ? haverDist(gps.lat, gps.lon, navTarget.lat, navTarget.lon) : null;
-  const arrowAngle = navBear != null && devHead != null ? (navBear - devHead + 360) % 360 : navBear;
+// ─── COMPASS DRAWING ───
+function drawCompassCanvas(id, heading, targetBearing, opts){
+  const canvas=$(id);if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,R=Math.min(cx,cy)-6;
+  ctx.clearRect(0,0,W,H);
 
-  // Proximity
-  useEffect(() => {
-    if (navDist == null) return;
-    if (navDist < 25 && !alerted) {
-      setAlerted(true);
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
-    }
-    if (navDist < 8 && !arrived) {
-      setArrived(true);
-      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
-    }
-    if (navDist > 50) { setAlerted(false); setArrived(false); }
-  }, [navDist]);
+  // Outer glow
+  const gr=ctx.createRadialGradient(cx,cy,R*0.5,cx,cy,R);
+  gr.addColorStop(0,'rgba(245,166,35,0)');gr.addColorStop(1,'rgba(245,166,35,0.05)');
+  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fillStyle=gr;ctx.fill();
 
-  const loadPins = async () => {
-    try { const r = await window.storage.get("mypins"); if (r) setMyPins(JSON.parse(r.value)); } catch {}
-    setPinsLoaded(true);
-  };
-  useEffect(() => { if (screen === "mypins" && !pinsLoaded) loadPins(); }, [screen]);
+  // ── ROTATE CANVAS for north-up ──
+  // All ticks/labels are drawn in rotated space so they represent absolute directions.
+  // Needles are drawn in screen space (not rotated).
+  ctx.save();
+  ctx.translate(cx,cy);
+  if(heading!==null)ctx.rotate(toR(-heading));
 
-  const handleCreate = async () => {
-    if (!gps) { alert("Waiting for GPS location…"); return; }
-    if (!msg.trim()) { alert("Please enter a message for this pin."); return; }
-    setSaving(true);
-    const mult = distUnit === "km" ? 1000 : distUnit === "mi" ? 1609.34 : 1;
-    const distM = parseFloat(distVal || "100") * mult;
-    const code = generateCode();
-    const pin = { code, message: msg.trim(), cat: CATS[catIdx], expiresAt: Date.now() + parseFloat(expHrs || "24") * 3600000, createdAt: Date.now(), mode: cMode };
-    if (cMode === "point") { pin.oLat = gps.lat; pin.oLon = gps.lon; pin.bear = currentBear; pin.distM = distM; }
-    else { pin.lat = gps.lat; pin.lon = gps.lon; pin.acc = gps.acc; }
-    try {
-      await window.storage.set(`pin:${code}`, JSON.stringify(pin), true);
-      let ps = [];
-      try { const r = await window.storage.get("mypins"); if (r) ps = JSON.parse(r.value); } catch {}
-      ps.unshift({ code, msg: msg.trim(), cat: CATS[catIdx], expiresAt: pin.expiresAt });
-      await window.storage.set("mypins", JSON.stringify(ps));
-      setMyPins(ps);
-      setCreatedCode(code);
-    } catch { alert("Storage error. Try again."); }
-    setSaving(false);
-  };
+  // Rings
+  ctx.beginPath();ctx.arc(0,0,R,0,Math.PI*2);ctx.strokeStyle='#2a3855';ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,R*0.62,0,Math.PI*2);ctx.strokeStyle='rgba(42,56,85,0.35)';ctx.lineWidth=1;ctx.stroke();
 
-  const handleNav = async (overCode) => {
-    const raw = (overCode || codeInput).toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const code = raw.length >= 8 ? raw.slice(0, 4) + "-" + raw.slice(4, 8) : raw;
-    setNavErr("");
-    try {
-      const r = await window.storage.get(`pin:${code}`, true);
-      if (!r) { setNavErr("Code not found. Check the code and try again."); return; }
-      const pin = JSON.parse(r.value);
-      if (pin.expiresAt < Date.now()) { setNavErr("This pin has expired."); return; }
-      setActivePin(pin); setAlerted(false); setArrived(false); setScreen("navigate");
-    } catch { setNavErr("Code not found. Check the code and try again."); }
-  };
+  // Ticks
+  for(let i=0;i<360;i+=5){
+    const a=toR(i-90);
+    const big=i%90===0,med=i%30===0;
+    const r0=big?R-20:med?R-14:R-8;
+    ctx.beginPath();ctx.moveTo(Math.cos(a)*r0,Math.sin(a)*r0);ctx.lineTo(Math.cos(a)*(R-2),Math.sin(a)*(R-2));
+    ctx.strokeStyle=big?'rgba(200,215,235,0.5)':'rgba(42,56,85,0.9)';ctx.lineWidth=big?2:1;ctx.stroke();
+  }
 
-  const copy = async (txt) => {
-    try { await navigator.clipboard.writeText(txt); } catch {}
-    setCopied(true); setTimeout(() => setCopied(false), 2000);
-  };
+  // Cardinal letters
+  [['N',0,'#e84040'],['E',90,'#4a607a'],['S',180,'#4a607a'],['W',270,'#4a607a']].forEach(([l,deg,col])=>{
+    const a=toR(deg-90);
+    ctx.font='bold 13px Outfit,sans-serif';ctx.fillStyle=col;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(l,Math.cos(a)*(R-28),Math.sin(a)*(R-28));
+  });
 
-  const resetCreate = () => {
-    setMsg(""); setCatIdx(0); setDistVal("100"); setDistUnit("m");
-    setExpHrs("24"); setCMode("point"); setLocked(false); setCreatedCode(null); setCopied(false);
-  };
+  ctx.restore(); // end rotated section
 
-  // ── Shared styles ──────────────────────────────────────────
-  const s = {
-    root: { minHeight: "100dvh", background: "#080b0f", color: "#e0d8c8", fontFamily: "'Rajdhani', sans-serif", fontSize: 16, overflowX: "hidden" },
-    header: { padding: "16px 20px 12px", borderBottom: "1px solid rgba(212,136,42,0.15)", display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 10 },
-    logo: { fontFamily: "'Orbitron',monospace", fontSize: 18, color: "#f5a623", fontWeight: 900, letterSpacing: 3, textShadow: "0 0 20px rgba(245,166,35,0.5)" },
-    tab: (active) => ({ padding: "8px 14px", borderRadius: 6, fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, cursor: "pointer", letterSpacing: 1, background: active ? "rgba(245,166,35,0.18)" : "transparent", color: active ? "#f5a623" : "rgba(224,216,200,0.5)", border: "1px solid " + (active ? "rgba(245,166,35,0.4)" : "transparent"), transition: "all 0.2s" }),
-    card: { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(212,136,42,0.15)", borderRadius: 12, padding: 20 },
-    label: { fontSize: 12, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.7)", letterSpacing: 2, marginBottom: 6, textTransform: "uppercase" },
-    input: { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(212,136,42,0.25)", borderRadius: 8, padding: "10px 14px", color: "#e0d8c8", fontFamily: "'Rajdhani',sans-serif", fontSize: 16, outline: "none", boxSizing: "border-box" },
-    btn: (variant = "primary") => ({
-      padding: "12px 24px", borderRadius: 8, fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, fontSize: 15, letterSpacing: 1.5,
-      cursor: "pointer", border: "none", transition: "all 0.2s",
-      background: variant === "primary" ? "linear-gradient(135deg,#d4882a,#f0a830)" : variant === "ghost" ? "transparent" : "rgba(255,255,255,0.06)",
-      color: variant === "primary" ? "#080b0f" : "#e0d8c8",
-      border: variant === "ghost" ? "1px solid rgba(212,136,42,0.3)" : "none",
-      boxShadow: variant === "primary" ? "0 4px 20px rgba(212,136,42,0.3)" : "none",
-    }),
-    bigNum: { fontFamily: "'Orbitron',monospace", fontSize: 42, color: "#f5a623", fontWeight: 700, textShadow: "0 0 30px rgba(245,166,35,0.5)", letterSpacing: 2 },
-    mono: { fontFamily: "'Orbitron',monospace" },
-  };
+  // ── NORTH NEEDLE (always 12 o'clock = up on screen) ──
+  _drawNeedle(ctx,cx,cy,R,0,'#e84040',8,0.88,true);
 
-  // ── HOME ──────────────────────────────────────────────────
-  if (screen === "home") return (
-    <div style={s.root}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
-        @keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
-        @keyframes spin { from{transform:rotate(0)}to{transform:rotate(360deg)} }
-        @keyframes fadeup { from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)} }
-        @keyframes ripple { 0%{transform:scale(1);opacity:0.6}100%{transform:scale(2.5);opacity:0} }
-        input::placeholder{color:rgba(224,216,200,0.3)}
-        textarea::placeholder{color:rgba(224,216,200,0.3)}
-        textarea{resize:none}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(212,136,42,0.3);border-radius:2px}
-      `}</style>
+  // ── TARGET NEEDLE (screen angle = absolute bearing minus device heading) ──
+  let sa=(targetBearing-(heading||0)+360)%360;
+  _drawNeedle(ctx,cx,cy,R,sa,'#f5a623',9,1.0,false);
 
-      {/* Topographic background */}
-      <div style={{ position: "fixed", inset: 0, opacity: 0.07, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
+  // Center hub
+  ctx.beginPath();ctx.arc(cx,cy,11,0,Math.PI*2);ctx.fillStyle='#090b0f';ctx.fill();
+  ctx.strokeStyle='#4a607a';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,4.5,0,Math.PI*2);ctx.fillStyle='#dce8f5';ctx.fill();
 
-      <header style={s.header}>
-        <div style={s.logo}>⬡ POINTME</div>
-        <GpsChip gps={gps} />
-      </header>
-
-      <div style={{ padding: "32px 20px 24px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.4s ease" }}>
-        {/* Hero */}
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-            <CompassRose bearing={devHead} size={160} />
-          </div>
-          <h1 style={{ fontFamily: "'Orbitron',monospace", fontSize: 13, color: "rgba(212,136,42,0.7)", letterSpacing: 4, margin: 0, marginBottom: 8 }}>COMPASS SHARING</h1>
-          <p style={{ color: "rgba(224,216,200,0.5)", fontSize: 14, margin: 0, lineHeight: 1.6 }}>
-            Point. Share a code. Your friends navigate to you—from anywhere.
-          </p>
-          {devHead != null && (
-            <div style={{ marginTop: 12, fontSize: 13, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.6)" }}>
-              {devHead}° {cardDir(devHead)}
-            </div>
-          )}
-        </div>
-
-        {/* Enter code */}
-        <div style={{ ...s.card, marginBottom: 16 }}>
-          <div style={s.label}>Enter Code</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input style={{ ...s.input, flex: 1, letterSpacing: 3, fontFamily: "'Orbitron',monospace", fontSize: 14 }}
-              placeholder="XXXX-XXXX" value={codeInput}
-              onChange={e => setCodeInput(e.target.value.toUpperCase().slice(0, 9))}
-              onKeyDown={e => e.key === "Enter" && handleNav()} />
-            <button style={{ ...s.btn("primary"), padding: "10px 18px", whiteSpace: "nowrap" }} onClick={() => handleNav()}>GO →</button>
-          </div>
-          {navErr && <div style={{ color: "#ff6644", fontSize: 12, marginTop: 8, fontFamily: "'Orbitron',monospace" }}>{navErr}</div>}
-        </div>
-
-        <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-          <button style={{ ...s.btn("ghost"), flex: 1, textAlign: "center" }} onClick={() => { resetCreate(); setScreen("create"); }}>
-            + CREATE PIN
-          </button>
-          <button style={{ ...s.btn("secondary"), flex: 1, textAlign: "center" }} onClick={() => setScreen("mypins")}>
-            MY PINS
-          </button>
-        </div>
-
-        {/* Feature pills */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[["🧭","Point Direction","Bearing + distance pin"],["📍","Drop Here","Exact GPS location"],["⏰","Auto-Expire","Pins expire after set time"],["📳","Proximity Buzz","Vibrates when you arrive"]].map(([e, t, d]) => (
-            <div key={t} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(212,136,42,0.1)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
-              <span style={{ marginRight: 6 }}>{e}</span>
-              <span style={{ color: "#e0d8c8", fontWeight: 600 }}>{t}</span>
-              <div style={{ color: "rgba(224,216,200,0.4)", fontSize: 11, marginTop: 2 }}>{d}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  // ── CREATE ─────────────────────────────────────────────────
-  if (screen === "create") return (
-    <div style={s.root}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}@keyframes fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}input::placeholder{color:rgba(224,216,200,0.3)}textarea::placeholder{color:rgba(224,216,200,0.3)}textarea{resize:none}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(212,136,42,0.3);border-radius:2px}`}</style>
-      <div style={{ position: "fixed", inset: 0, opacity: 0.05, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
-
-      <header style={s.header}>
-        <button style={{ background: "none", border: "none", color: "rgba(212,136,42,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace", letterSpacing: 1 }} onClick={() => setScreen("home")}>← BACK</button>
-        <div style={s.logo}>CREATE PIN</div>
-        <GpsChip gps={gps} />
-      </header>
-
-      {createdCode ? (
-        // SUCCESS
-        <div style={{ padding: "32px 20px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
-            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 14, color: "#44dd88", letterSpacing: 3 }}>PIN CREATED!</div>
-          </div>
-          <div style={{ ...s.card, textAlign: "center", marginBottom: 16, border: "1px solid rgba(68,221,136,0.3)" }}>
-            <div style={{ fontSize: 11, fontFamily: "'Orbitron',monospace", color: "rgba(68,221,136,0.7)", letterSpacing: 3, marginBottom: 12 }}>SHARE THIS CODE</div>
-            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 36, color: "#f5a623", letterSpacing: 8, fontWeight: 900, textShadow: "0 0 30px rgba(245,166,35,0.5)", marginBottom: 16 }}>
-              {createdCode}
-            </div>
-            <div style={{ fontSize: 12, color: "rgba(224,216,200,0.5)", marginBottom: 16 }}>
-              {CATS[catIdx].e} {msg} · expires in {expHrs}h
-            </div>
-            <button style={{ ...s.btn("primary"), width: "100%" }} onClick={() => copy(createdCode)}>
-              {copied ? "✓ COPIED!" : "COPY CODE"}
-            </button>
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button style={{ ...s.btn("ghost"), flex: 1 }} onClick={resetCreate}>+ NEW PIN</button>
-            <button style={{ ...s.btn("secondary"), flex: 1 }} onClick={() => setScreen("home")}>HOME</button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ padding: "20px 20px 32px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
-          {/* Mode selector */}
-          <div style={{ ...s.card, marginBottom: 14 }}>
-            <div style={s.label}>Pin Mode</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[["point", "🧭", "Point Direction", "Bearing + distance (good for imprecise GPS)"],
-                ["here", "📍", "Drop Here", "Exact GPS coordinates"]].map(([m, e, t, d]) => (
-                <button key={m} onClick={() => setCMode(m)} style={{
-                  flex: 1, padding: 12, borderRadius: 8, cursor: "pointer", textAlign: "left",
-                  background: cMode === m ? "rgba(245,166,35,0.12)" : "rgba(255,255,255,0.03)",
-                  border: "1px solid " + (cMode === m ? "rgba(245,166,35,0.5)" : "rgba(212,136,42,0.15)"),
-                  color: "#e0d8c8", transition: "all 0.2s"
-                }}>
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>{e}</div>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{t}</div>
-                  <div style={{ fontSize: 11, color: "rgba(224,216,200,0.45)", lineHeight: 1.3, marginTop: 2 }}>{d}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Compass (point mode) */}
-          {cMode === "point" && (
-            <div style={{ ...s.card, marginBottom: 14, textAlign: "center" }}>
-              <div style={s.label}>Compass Direction</div>
-              {devHead == null && (
-                <div style={{ fontSize: 12, color: "#f5a623", marginBottom: 12, fontFamily: "'Orbitron',monospace" }}>
-                  ⚠ Rotate device to calibrate compass
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-                <CompassRose bearing={locked ? lockedBear : devHead} size={160} label={`${locked ? lockedBear : (devHead ?? 0)}° ${cardDir(locked ? lockedBear : (devHead ?? 0))}`} />
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                <button style={{
-                  ...s.btn(locked ? "primary" : "ghost"), fontSize: 13, padding: "10px 20px"
-                }} onClick={() => {
-                  if (!locked) { setLockedBear(devHead ?? 0); setLocked(true); }
-                  else setLocked(false);
-                }}>
-                  {locked ? `🔒 LOCKED ${lockedBear}° ${cardDir(lockedBear)}` : "🔓 TAP TO LOCK"}
-                </button>
-              </div>
-              <div style={{ fontSize: 11, color: "rgba(224,216,200,0.35)", marginTop: 8 }}>
-                Point your phone in the desired direction, then tap to lock
-              </div>
-            </div>
-          )}
-
-          {/* Distance (point mode) */}
-          {cMode === "point" && (
-            <div style={{ ...s.card, marginBottom: 14 }}>
-              <div style={s.label}>Approximate Distance</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input style={{ ...s.input, flex: 1 }} type="number" placeholder="100"
-                  value={distVal} onChange={e => setDistVal(e.target.value)} />
-                <select style={{ ...s.input, width: "auto", cursor: "pointer", paddingRight: 8 }}
-                  value={distUnit} onChange={e => setDistUnit(e.target.value)}>
-                  <option value="m">m</option>
-                  <option value="km">km</option>
-                  <option value="mi">mi</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* GPS info (here mode) */}
-          {cMode === "here" && (
-            <div style={{ ...s.card, marginBottom: 14 }}>
-              <div style={s.label}>Your Location</div>
-              {gps ? (
-                <>
-                  <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 12, color: "rgba(212,136,42,0.8)", marginBottom: 4 }}>
-                    {gps.lat.toFixed(6)}, {gps.lon.toFixed(6)}
-                  </div>
-                  <GpsChip gps={gps} />
-                  {gps.acc > 50 && (
-                    <div style={{ marginTop: 8, padding: "8px 12px", background: "rgba(255,68,70,0.1)", border: "1px solid rgba(255,68,70,0.2)", borderRadius: 6, fontSize: 12, color: "#ff8866" }}>
-                      ⚠ GPS accuracy is low (±{gps.acc}m). Try "Point Direction" mode instead for better results outdoors, or wait for better signal.
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ color: "rgba(224,216,200,0.4)", fontSize: 13 }}>Acquiring GPS…</div>
-              )}
-            </div>
-          )}
-
-          {/* Message */}
-          <div style={{ ...s.card, marginBottom: 14 }}>
-            <div style={s.label}>Message</div>
-            <textarea style={{ ...s.input, height: 72 }} placeholder="e.g. I'm near the red tent, come find me!"
-              value={msg} onChange={e => setMsg(e.target.value)} maxLength={120} />
-            <div style={{ textAlign: "right", fontSize: 11, color: "rgba(224,216,200,0.3)", marginTop: 4 }}>{msg.length}/120</div>
-          </div>
-
-          {/* Category */}
-          <div style={{ ...s.card, marginBottom: 14 }}>
-            <div style={s.label}>Category</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {CATS.map((cat, i) => (
-                <button key={i} onClick={() => setCatIdx(i)} style={{
-                  padding: "6px 10px", borderRadius: 20, cursor: "pointer", fontSize: 13, fontFamily: "'Rajdhani',sans-serif", fontWeight: 600,
-                  background: catIdx === i ? `${cat.c}22` : "rgba(255,255,255,0.03)",
-                  border: "1px solid " + (catIdx === i ? cat.c + "66" : "rgba(212,136,42,0.1)"),
-                  color: catIdx === i ? cat.c : "rgba(224,216,200,0.5)", transition: "all 0.15s"
-                }}>
-                  {cat.e} {cat.l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Expiry */}
-          <div style={{ ...s.card, marginBottom: 20 }}>
-            <div style={s.label}>Pin Expires In</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {[["1", "1 hr"], ["6", "6 hrs"], ["24", "24 hrs"], ["72", "3 days"], ["168", "1 week"]].map(([v, l]) => (
-                <button key={v} onClick={() => setExpHrs(v)} style={{
-                  padding: "8px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace",
-                  background: expHrs === v ? "rgba(245,166,35,0.15)" : "rgba(255,255,255,0.03)",
-                  border: "1px solid " + (expHrs === v ? "rgba(245,166,35,0.5)" : "rgba(212,136,42,0.12)"),
-                  color: expHrs === v ? "#f5a623" : "rgba(224,216,200,0.5)", transition: "all 0.15s"
-                }}>{l}</button>
-              ))}
-            </div>
-          </div>
-
-          <button style={{ ...s.btn("primary"), width: "100%", padding: 16, fontSize: 16 }}
-            onClick={handleCreate} disabled={saving}>
-            {saving ? "SAVING…" : "CREATE & GET CODE"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // ── NAVIGATE ───────────────────────────────────────────────
-  if (screen === "navigate") return (
-    <div style={s.root}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}@keyframes fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}@keyframes ripple{0%{transform:scale(1);opacity:0.6}100%{transform:scale(2.5);opacity:0}}`}</style>
-      <div style={{ position: "fixed", inset: 0, opacity: 0.05, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
-
-      <header style={s.header}>
-        <button style={{ background: "none", border: "none", color: "rgba(212,136,42,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace", letterSpacing: 1 }}
-          onClick={() => { setScreen("home"); setActivePin(null); setNavTarget(null); }}>← BACK</button>
-        <div style={s.logo}>NAVIGATE</div>
-        <GpsChip gps={gps} />
-      </header>
-
-      <div style={{ padding: "20px 20px 32px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
-        {/* Pin info card */}
-        {activePin && (
-          <div style={{ ...s.card, marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 12, border: `1px solid ${activePin.cat?.c}33` }}>
-            <div style={{ fontSize: 28 }}>{activePin.cat?.e}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{activePin.message}</div>
-              <div style={{ display: "flex", gap: 12, fontSize: 12, color: "rgba(224,216,200,0.5)" }}>
-                <span style={{ fontFamily: "'Orbitron',monospace" }}>{activePin.code}</span>
-                <span>·</span>
-                <span>expires {fmtTime(activePin.expiresAt - Date.now())}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Arrived banner */}
-        {arrived && (
-          <div style={{ textAlign: "center", padding: "16px", marginBottom: 16, background: "rgba(68,221,136,0.1)", border: "1px solid rgba(68,221,136,0.4)", borderRadius: 12, animation: "fadeup 0.3s ease" }}>
-            <div style={{ fontSize: 28, marginBottom: 6 }}>🎯</div>
-            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 14, color: "#44dd88", letterSpacing: 2 }}>YOU'VE ARRIVED!</div>
-          </div>
-        )}
-
-        {/* Main compass / arrow */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24 }}>
-          <NavArrow angle={arrowAngle} size={220} />
-          <div style={{ marginTop: 32, textAlign: "center" }}>
-            {navDist != null ? (
-              <>
-                <div style={s.bigNum}>{fmtDist(navDist)}</div>
-                <div style={{ fontSize: 13, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.6)", marginTop: 6, letterSpacing: 2 }}>
-                  {navBear != null ? `${Math.round(navBear)}° ${cardDir(navBear)}` : "CALCULATING…"}
-                </div>
-              </>
-            ) : (
-              <div style={{ fontSize: 13, fontFamily: "'Orbitron',monospace", color: "rgba(224,216,200,0.4)" }}>
-                {!gps ? "ACQUIRING GPS…" : "CALCULATING…"}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-          {[
-            ["BEARING", navBear != null ? `${Math.round(navBear)}°` : "—", "#f5a623"],
-            ["YOUR HDG", devHead != null ? `${devHead}°` : "—", "rgba(212,136,42,0.7)"],
-            ["GPS ACC", gps ? `±${gps.acc}m` : "—", gps?.acc < 20 ? "#44dd88" : gps?.acc < 50 ? "#f5a623" : "#ff6644"],
-          ].map(([l, v, c]) => (
-            <div key={l} style={{ flex: 1, ...s.card, textAlign: "center", padding: 12 }}>
-              <div style={{ fontSize: 9, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.5)", letterSpacing: 2, marginBottom: 4 }}>{l}</div>
-              <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 16, color: c, fontWeight: 700 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Tip */}
-        {devHead == null && (
-          <div style={{ ...s.card, marginBottom: 12, background: "rgba(245,166,35,0.06)", border: "1px solid rgba(245,166,35,0.2)" }}>
-            <div style={{ fontSize: 12, color: "rgba(245,166,35,0.8)" }}>
-              🧭 <strong>Tip:</strong> Rotate your phone in a figure-8 pattern to calibrate the compass. The arrow will point toward the pin relative to where you're facing.
-            </div>
-          </div>
-        )}
-
-        {navDist != null && navDist < 25 && !arrived && (
-          <div style={{ ...s.card, marginBottom: 12, background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.4)", textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: "#f5a623", fontFamily: "'Orbitron',monospace", letterSpacing: 1 }}>
-              📳 ALMOST THERE — {fmtDist(navDist)} away
-            </div>
-          </div>
-        )}
-
-        {activePin?.mode === "point" && gps && (
-          <div style={{ fontSize: 11, color: "rgba(224,216,200,0.3)", textAlign: "center", fontFamily: "'Orbitron',monospace" }}>
-            Target computed from {Math.round(haverDist(gps.lat, gps.lon, activePin.oLat, activePin.oLon))}m origin · {Math.round(activePin.bear)}° · {fmtDist(activePin.distM)}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  // ── MY PINS ────────────────────────────────────────────────
-  if (screen === "mypins") return (
-    <div style={s.root}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;500;600;700&display=swap');*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}@keyframes fadeup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <div style={{ position: "fixed", inset: 0, opacity: 0.05, pointerEvents: "none", backgroundImage: "repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(212,136,42,0.5) 40px)", backgroundSize: "40px 40px" }} />
-
-      <header style={s.header}>
-        <button style={{ background: "none", border: "none", color: "rgba(212,136,42,0.7)", cursor: "pointer", fontSize: 13, fontFamily: "'Orbitron',monospace", letterSpacing: 1 }} onClick={() => setScreen("home")}>← BACK</button>
-        <div style={s.logo}>MY PINS</div>
-        <GpsChip gps={gps} />
-      </header>
-
-      <div style={{ padding: "20px 20px 32px", maxWidth: 480, margin: "0 auto", animation: "fadeup 0.3s ease" }}>
-        {!pinsLoaded ? (
-          <div style={{ textAlign: "center", color: "rgba(224,216,200,0.4)", padding: 40, fontFamily: "'Orbitron',monospace", fontSize: 12 }}>LOADING…</div>
-        ) : myPins.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 60 }}>
-            <div style={{ fontSize: 40, marginBottom: 16 }}>📍</div>
-            <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 12, color: "rgba(224,216,200,0.4)", letterSpacing: 2 }}>NO PINS YET</div>
-            <div style={{ color: "rgba(224,216,200,0.3)", fontSize: 13, marginTop: 8 }}>Create your first pin to share with friends</div>
-            <button style={{ ...s.btn("ghost"), marginTop: 20 }} onClick={() => { resetCreate(); setScreen("create"); }}>+ CREATE PIN</button>
-          </div>
-        ) : (
-          <>
-            <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 12, fontFamily: "'Orbitron',monospace", color: "rgba(212,136,42,0.5)" }}>{myPins.length} PIN{myPins.length !== 1 ? "S" : ""}</div>
-              <button style={{ ...s.btn("ghost"), padding: "6px 14px", fontSize: 12 }} onClick={() => { resetCreate(); setScreen("create"); }}>+ NEW PIN</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {myPins.map((p) => {
-                const expired = p.expiresAt < Date.now();
-                const remaining = p.expiresAt - Date.now();
-                return (
-                  <div key={p.code} style={{
-                    ...s.card, opacity: expired ? 0.45 : 1,
-                    border: `1px solid ${expired ? "rgba(255,100,100,0.15)" : p.cat?.c + "33" || "rgba(212,136,42,0.15)"}`,
-                    cursor: expired ? "default" : "pointer",
-                    transition: "border 0.2s"
-                  }}>
-                    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                      <div style={{ fontSize: 24, marginTop: 2 }}>{p.cat?.e}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.msg}</div>
-                        <div style={{ fontFamily: "'Orbitron',monospace", fontSize: 14, color: "#f5a623", letterSpacing: 4, marginBottom: 6 }}>{p.code}</div>
-                        <div style={{ fontSize: 12, color: expired ? "#ff6644" : "rgba(224,216,200,0.45)", fontFamily: "'Orbitron',monospace" }}>
-                          {expired ? "EXPIRED" : `expires in ${fmtTime(remaining)}`}
-                        </div>
-                      </div>
-                      {!expired && (
-                        <button style={{ ...s.btn("ghost"), padding: "6px 12px", fontSize: 11, flexShrink: 0 }}
-                          onClick={() => copy(p.code)}>
-                          COPY
-                        </button>
-                      )}
-                    </div>
-                    {!expired && (
-                      <button style={{ ...s.btn("primary"), width: "100%", marginTop: 10, padding: "10px", fontSize: 13 }}
-                        onClick={() => handleNav(p.code)}>
-                        NAVIGATE →
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-
-  return null;
+  // Center text
+  if(opts&&opts.centerText){
+    ctx.fillStyle='rgba(220,232,245,0.45)';ctx.font='600 13px Outfit,sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(opts.centerText,cx,cy+24);
+  }
 }
+
+function _drawNeedle(ctx,cx,cy,R,angleDeg,color,hw,alpha,dimBack){
+  const a=toR(angleDeg-90);
+  const tip=R-14,back=R*0.3;
+  const tx=cx+Math.cos(a)*tip,ty=cy+Math.sin(a)*tip;
+  const lx=cx+Math.cos(a+Math.PI/2)*hw,ly=cy+Math.sin(a+Math.PI/2)*hw;
+  const rx=cx+Math.cos(a-Math.PI/2)*hw,ry=cy+Math.sin(a-Math.PI/2)*hw;
+  const bx=cx-Math.cos(a)*back,by=cy-Math.sin(a)*back;
+  ctx.save();
+  ctx.globalAlpha=alpha;ctx.shadowColor=color;ctx.shadowBlur=dimBack?8:22;
+  ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(lx,ly);ctx.lineTo(bx,by);ctx.lineTo(rx,ry);ctx.closePath();
+  ctx.fillStyle=color;ctx.fill();
+  ctx.shadowBlur=0;ctx.globalAlpha=alpha*0.45;
+  ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(bx,by);ctx.lineTo(rx,ry);ctx.closePath();
+  ctx.fillStyle=dimBack?'#6a1515':'#7a5010';ctx.fill();
+  ctx.restore();
+}
+
+// ─── CREATOR COMPASS ───
+const Compass={
+  locked:true,
+  targetBearing:0,
+  _drag:false,
+
+  init(){
+    const c=$('cCanvas');if(!c||c._init)return;c._init=true;
+    const angle=e=>{
+      const r=c.getBoundingClientRect(),px=(e.touches?e.touches[0].clientX:e.clientX)-r.left-r.width/2,py=(e.touches?e.touches[0].clientY:e.clientY)-r.top-r.height/2;
+      return (toD(Math.atan2(px,-py))+360)%360;
+    };
+    ['mousedown','touchstart'].forEach(ev=>c.addEventListener(ev,e=>{
+      this._drag=true;this.locked=false;this._lockUI();
+      this.targetBearing=angle(e);e.preventDefault();
+    },{passive:false}));
+    ['mousemove','touchmove'].forEach(ev=>window.addEventListener(ev,e=>{
+      if(!this._drag)return;this.targetBearing=angle(e);
+    }));
+    ['mouseup','touchend','touchcancel'].forEach(ev=>window.addEventListener(ev,()=>this._drag=false));
+    // Auto-start device compass
+    Orient.requestAndStart((h,p)=>{
+      if(this.locked&&h!==null)this.targetBearing=h;
+      Tilt.onPitch(p);
+    });
+  },
+
+  toggleLock(){
+    this.locked=!this.locked;this._lockUI();
+    showToast(this.locked?'Following phone direction':'Manual — drag the orange needle');
+  },
+
+  _lockUI(){
+    const pill=$('compassPill'),text=$('compassPillText');
+    if(this.locked){pill.className='sensor-pill on';text.textContent='Following Phone';}
+    else{pill.className='sensor-pill';text.textContent='Manual (drag needle)';}
+  },
+
+  draw(){drawCompassCanvas('cCanvas',Orient.heading,this.targetBearing);}
+};
+
+// ─── TILT / ALTITUDE ───
+const Tilt={
+  angle:0,fromSensor:false,_drag:false,
+
+  init(){
+    const track=$('altTrack');if(!track||track._init)return;track._init=true;
+    const get=clientX=>{const r=track.getBoundingClientRect();return Math.round(Math.max(-90,Math.min(90,(Math.max(0,Math.min(1,(clientX-r.left)/r.width))-0.5)*180)));};
+    ['mousedown','touchstart'].forEach(ev=>track.addEventListener(ev,e=>{
+      if(this.fromSensor)return;this._drag=true;
+      this.angle=get(e.touches?e.touches[0].clientX:e.clientX);this._ui();e.preventDefault();
+    },{passive:false}));
+    ['mousemove','touchmove'].forEach(ev=>window.addEventListener(ev,e=>{
+      if(!this._drag||this.fromSensor)return;this.angle=get(e.touches?e.touches[0].clientX:e.clientX);this._ui();
+    }));
+    ['mouseup','touchend'].forEach(ev=>window.addEventListener(ev,()=>this._drag=false));
+    this._ui();
+  },
+
+  toggle(){
+    this.fromSensor=!this.fromSensor;
+    const pill=$('tiltPill'),text=$('tiltPillText');
+    if(this.fromSensor){pill.className='sensor-pill on';text.textContent='Tilt ON — tilt phone';showToast('📐 Tilt phone forward/back to adjust vertical angle');}
+    else{pill.className='sensor-pill';text.textContent='Enable Tilt';showToast('Manual slider mode');}
+  },
+
+  onPitch(p){if(!this.fromSensor||p===null)return;this.angle=Math.round(Math.max(-90,Math.min(90,p)));this._ui();},
+
+  _ui(){
+    const thumb=$('altThumb'),fill=$('altFill'),label=$('altLabel'),track=$('altTrack');
+    if(!thumb||!track)return;
+    const W=track.offsetWidth||300,frac=(this.angle+90)/180,x=frac*W,cx=W/2;
+    thumb.style.left=x+'px';
+    if(x>=cx){fill.style.left=cx+'px';fill.style.width=(x-cx)+'px';}
+    else{fill.style.left=x+'px';fill.style.width=(cx-x)+'px';}
+    if(label)label.textContent=(this.angle>0?'+':'')+this.angle+'°';
+  }
+};
+
+// ─── CREATOR MAP ───
+const CMap={
+  map:null,marker:null,lat:null,lng:null,
+  init(){
+    if(this.map){setTimeout(()=>this.map.invalidateSize(),80);return;}
+    const center=GPS.lat?[GPS.lat,GPS.lng]:[20.5937,78.9629];
+    this.map=L.map('createMapEl',{zoomControl:true,attributionControl:false}).setView(center,GPS.lat?15:5);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(this.map);
+    if(GPS.lat){
+      const ic=L.divIcon({html:'<div style="width:12px;height:12px;background:#00d4aa;border-radius:50%;border:2.5px solid white;box-shadow:0 0 8px #00d4aa"></div>',iconSize:[12,12],iconAnchor:[6,6],className:''});
+      L.marker([GPS.lat,GPS.lng],{icon:ic}).addTo(this.map).bindPopup('You');
+    }
+    this.map.on('click',e=>{
+      const{lat,lng}=e.latlng;this.lat=lat;this.lng=lng;
+      if(this.marker)this.map.removeLayer(this.marker);
+      const ic=L.divIcon({html:'<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.8))">📍</div>',iconSize:[26,30],iconAnchor:[13,28],className:''});
+      this.marker=L.marker([lat,lng],{icon:ic}).addTo(this.map);
+      $('createMapHint').textContent='✓ Pin placed — tap again to move';
+      showToast(`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    });
+    setTimeout(()=>this.map.invalidateSize(),100);
+  },
+  clear(){this.lat=null;this.lng=null;if(this.marker&&this.map){this.map.removeLayer(this.marker);this.marker=null;}$('createMapHint').textContent='👆 Tap map to place pin';}
+};
+
+// ─── NAVIGATE ───
+const Nav={
+  session:null,pinIdx:0,map:null,
+  userMk:null,pinMks:[],
+  manLat:null,manLng:null,
+  tapMode:false,proxFired:{},
+  _loopId:null,
+
+  load(session){
+    this.session=session;this.pinIdx=0;this.manLat=null;this.manLng=null;this.proxFired={};
+    showPage('pgNav');
+    $('navTitle').textContent=session.name||'Navigate';
+    Orient.requestAndStart(()=>{});
+    this._renderSelector();this._renderList();this._initMap();
+    this.selectPin(0);this._startLoop();
+  },
+
+  _startLoop(){
+    if(this._loopId)cancelAnimationFrame(this._loopId);
+    const loop=()=>{
+      if(!$('pgNav').classList.contains('active')){this._loopId=null;return;}
+      this._drawCompass();this._updateStats();
+      this._loopId=requestAnimationFrame(loop);
+    };
+    this._loopId=requestAnimationFrame(loop);
+  },
+
+  _getTarget(){
+    const pin=this.session.pins[this.pinIdx];
+    const myLat=this.manLat??GPS.lat,myLng=this.manLng??GPS.lng;
+    let b=pin.bearing??0,dist=null;
+    if(pin.lat!==null&&myLat!==null){dist=haversine(myLat,myLng,pin.lat,pin.lng);b=calcBearing(myLat,myLng,pin.lat,pin.lng);}
+    return{b,dist,pin,myLat,myLng};
+  },
+
+  _drawCompass(){
+    if(!this.session)return;
+    const{b,dist}=this._getTarget();
+    drawCompassCanvas('nCanvas',Orient.heading,b,{centerText:dist!==null?fmtDist(dist):''});
+  },
+
+  _updateStats(){
+    if(!this.session)return;
+    const{b,dist}=this._getTarget();
+    $('nDist').textContent=dist!==null?fmtDist(dist):'—';
+    $('nBearing').textContent=Math.round(b)+'° '+card(b);
+    $('nETA').textContent=dist!==null?fmtETA(dist):'—';
+    if(dist!==null)this._checkProx(dist);
+  },
+
+  _checkProx(dist){
+    const pin=this.session.pins[this.pinIdx];
+    if(!pin.prox||this.proxFired[pin.id])return;
+    if(dist<=pin.prox){
+      this.proxFired[pin.id]=true;
+      const a=$('proxAlert');
+      a.textContent=`${CAT[pin.cat]} ${fmtDist(dist)} away! "${pin.msg.substring(0,30)}"`;
+      a.style.display='block';
+      if(navigator.vibrate)navigator.vibrate([200,100,300]);
+      setTimeout(()=>{a.style.display='none';delete this.proxFired[pin.id];},5000);
+    }
+  },
+
+  selectPin(i){
+    this.pinIdx=i;
+    document.querySelectorAll('.nav-pin-btn').forEach((b,j)=>b.classList.toggle('active',j===i));
+    const pin=this.session.pins[i];
+    $('nMsgText').textContent=pin.msg||'—';
+    const hasAlt=pin.alt&&pin.alt!==0;
+    $('nAltViewer').style.display=hasAlt?'flex':'none';
+    if(hasAlt){
+      $('nAltVal').textContent=(pin.alt>0?'+':'')+pin.alt+'°';
+      $('nAltDesc').textContent=pin.alt>0?'Tilt phone up to aim at target':pin.alt<0?'Tilt phone down to aim at target':'Hold phone level to aim at target';
+      this._drawAltArc(pin.alt);
+    }
+    this._centerMap();this._updateLocFix();
+  },
+
+  _drawAltArc(angle){
+    const c=$('nAltArc');if(!c)return;
+    const ctx=c.getContext('2d'),W=90,H=55,cx=W/2,cy=H-4,r=36;
+    ctx.clearRect(0,0,W,H);
+    ctx.beginPath();ctx.arc(cx,cy,r,Math.PI,0);ctx.strokeStyle='#1e2a40';ctx.lineWidth=4;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(6,cy);ctx.lineTo(W-6,cy);ctx.strokeStyle='#2a3855';ctx.lineWidth=1;ctx.stroke();
+    const endA=Math.PI-toR(angle);
+    const [sa,ea,ccw]=[angle>=0?endA:Math.PI,angle>=0?Math.PI:endA,angle<0];
+    ctx.beginPath();ctx.arc(cx,cy,r,sa,ea,ccw);ctx.strokeStyle='#f5a623';ctx.lineWidth=4;ctx.stroke();
+    ctx.beginPath();ctx.arc(cx+Math.cos(endA)*r,cy+Math.sin(endA)*r,6,0,Math.PI*2);ctx.fillStyle='#f5a623';ctx.fill();
+  },
+
+  _renderSelector(){
+    $('navPinScroll').innerHTML=this.session.pins.map((p,i)=>
+      `<button class="nav-pin-btn${i===0?' active':''}" onclick="Nav.selectPin(${i})">${CAT[p.cat]} Pin ${i+1}</button>`
+    ).join('');
+  },
+
+  _renderList(){
+    $('navPinList').innerHTML=this.session.pins.map((p,i)=>_pinCard(p,i,false)).join('');
+  },
+
+  _initMap(){
+    if(this.map){this.map.remove();this.map=null;}this.pinMks=[];
+    const fp=this.session.pins.find(p=>p.lat!==null);
+    const center=fp?[fp.lat,fp.lng]:GPS.lat?[GPS.lat,GPS.lng]:[20.5937,78.9629];
+    this.map=L.map('navMapEl',{zoomControl:false,attributionControl:false}).setView(center,14);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(this.map);
+    this.session.pins.forEach((p,i)=>{
+      if(p.lat===null)return;
+      const col=CATCOL[p.cat]||'#f5a623';
+      const ic=L.divIcon({html:`<div style="background:${col};width:14px;height:14px;border-radius:50%;border:2.5px solid white;box-shadow:0 0 8px ${col}88"></div>`,iconSize:[14,14],iconAnchor:[7,7],className:''});
+      L.marker([p.lat,p.lng],{icon:ic}).addTo(this.map).bindPopup(`<b>${CAT[p.cat]} Pin ${i+1}</b><br>${p.msg}`);
+    });
+    this.map.on('click',e=>{
+      if(!this.tapMode)return;
+      this.manLat=e.latlng.lat;this.manLng=e.latlng.lng;
+      this.tapMode=false;$('nMapHint').style.display='none';$('navMapEl').style.outline='none';
+      this._updateUserMarker();this._updateLocFix();
+      showToast('📍 Your location set — compass updated!');
+    });
+    this._updateUserMarker();
+    setTimeout(()=>this.map.invalidateSize(),150);
+  },
+
+  _updateUserMarker(){
+    if(!this.map)return;
+    const lat=this.manLat??GPS.lat,lng=this.manLng??GPS.lng;
+    if(lat===null)return;
+    if(this.userMk)this.map.removeLayer(this.userMk);
+    const ic=L.divIcon({html:'<div style="width:16px;height:16px;background:#00d4aa;border-radius:50%;border:3px solid white;box-shadow:0 0 10px #00d4aa88"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''});
+    this.userMk=L.marker([lat,lng],{icon:ic,zIndexOffset:200}).addTo(this.map).bindPopup('You');
+  },
+
+  _centerMap(){
+    if(!this.map)return;
+    const pin=this.session.pins[this.pinIdx];
+    const myLat=this.manLat??GPS.lat,myLng=this.manLng??GPS.lng;
+    const pts=[];
+    if(pin.lat!==null)pts.push([pin.lat,pin.lng]);
+    if(myLat!==null)pts.push([myLat,myLng]);
+    if(pts.length>=2)this.map.fitBounds(L.latLngBounds(pts),{padding:[40,40]});
+    else if(pts.length===1)this.map.setView(pts[0],15);
+    setTimeout(()=>this.map.invalidateSize(),100);
+  },
+
+  enableManualTap(){
+    this.tapMode=true;$('nMapHint').style.display='block';$('navMapEl').style.outline='2px solid var(--gps)';
+    showToast('👆 Tap map to set your location');
+    $('navMapEl').scrollIntoView({behavior:'smooth',block:'center'});
+  },
+
+  onGPS(){this._updateUserMarker();this._updateLocFix();},
+
+  _updateLocFix(){
+    const ok=(GPS.lat!==null&&(GPS.acc||999)<150)||(this.manLat!==null);
+    $('gpsFixBox').style.display=ok?'none':'';
+  }
+};
+
+// ─── PIN CARD ───
+function _pinCard(p,i,del){
+  const b=p.bearing!==null?`<span class="chip t">${Math.round(p.bearing)}° ${card(p.bearing)}</span>`:'';
+  const d=p.dist?`<span class="chip">${fmtDist(p.dist)}</span>`:'';
+  const a=p.alt?`<span class="chip g">${p.alt>0?'+':''}${p.alt}°</span>`:'';
+  const pos=p.lat!==null?`<span class="chip">${p.lat.toFixed(4)},${p.lng.toFixed(4)}</span>`:`<span class="chip n">dir only</span>`;
+  const btn=del?`<button class="pin-del" onclick="App.deletePin(${i})">✕</button>`:
+    `<button class="pin-nav-btn" onclick="Nav.selectPin(${i})">▶</button>`;
+  return `<div class="pin-card">
+    <div class="pin-emoji">${CAT[p.cat]}</div>
+    <div class="pin-info">
+      <div class="pin-cat" style="color:${CATCOL[p.cat]}">${p.cat.charAt(0).toUpperCase()+p.cat.slice(1)}</div>
+      <div class="pin-msg">${p.msg}</div>
+      <div class="pin-chips">${b}${d}${a}${pos}</div>
+    </div>${btn}
+  </div>`;
+}
+
+// ─── APP ───
+const App={
+  session:null,pins:[],tab:'compass',cat:'meet',
+
+  goHome(){showPage('pgHome');},
+
+  goCreate(){
+    this.pins=[];this._renderPins();
+    showPage('pgCreate');
+    setTimeout(()=>{Compass.init();Tilt.init();},120);
+  },
+
+  goJoin(){$('joinInput').value='';showPage('pgJoin');},
+
+  setTab(t){
+    this.tab=t;
+    ['Compass','Map'].forEach(x=>{
+      const id='tab'+x,pid='panel'+x;
+      $(id)?.classList.toggle('active',x.toLowerCase()===t);
+      const el=$(pid);if(el)el.style.display=x.toLowerCase()===t?'':'none';
+    });
+    $('distFieldWrap').style.display=t==='compass'?'':'none';
+    if(t==='map')setTimeout(()=>CMap.init(),60);
+  },
+
+  setCat(el){
+    this.cat=el.dataset.cat;
+    document.querySelectorAll('.cat-pill').forEach(p=>p.classList.remove('active'));
+    el.classList.add('active');
+  },
+
+  addPin(){
+    const msg=$('pinMsg').value.trim();
+    const exp=parseInt($('pinExpiry').value);
+    const prox=parseInt($('pinProx').value);
+    const alt=Tilt.angle;
+    let lat=null,lng=null,brg=null,dist=null;
+
+    if(this.tab==='compass'){
+      brg=Math.round(Compass.targetBearing);
+      const dv=parseFloat($('pinDist').value);
+      if(!isNaN(dv)&&dv>0){
+        if(GPS.lat===null){showToast('GPS needed to compute distance direction',true);return;}
+        const unit=$('pinUnit').value;
+        dist=unit==='m'?dv:unit==='km'?dv*1000:dv*1609.34;
+        const dp=destPoint(GPS.lat,GPS.lng,brg,dist);
+        lat=dp.lat;lng=dp.lng;
+      }
+    } else {
+      if(CMap.lat===null){showToast('Tap the map to place a pin first',true);return;}
+      lat=CMap.lat;lng=CMap.lng;
+      if(GPS.lat!==null)brg=Math.round(calcBearing(GPS.lat,GPS.lng,lat,lng));
+      CMap.clear();
+    }
+
+    this.pins.push({id:Date.now().toString(36),lat,lng,bearing:brg,dist,alt,msg:msg||'No message',cat:this.cat,expiry:exp>0?Date.now()+exp*60000:0,prox});
+    $('pinMsg').value='';$('pinDist').value='';
+    this._renderPins();showToast(`${CAT[this.cat]} Pin added!`);
+  },
+
+  deletePin(i){this.pins.splice(i,1);this._renderPins();},
+
+  _renderPins(){
+    const list=$('createPinList'),empty=$('createEmpty');
+    $('pinCountLabel').textContent=`(${this.pins.length})`;
+    if(!this.pins.length){list.innerHTML='';empty.style.display='';return;}
+    empty.style.display='none';
+    list.innerHTML=this.pins.map((p,i)=>_pinCard(p,i,true)).join('');
+  },
+
+  share(){
+    if(!this.pins.length){showToast('Add at least one pin first!',true);return;}
+    const name=prompt('Session name (e.g. "Party at Raj\'s"):','My Session')||'My Session';
+    this.session={name,pins:this.pins,created:Date.now(),creatorLat:GPS.lat,creatorLng:GPS.lng};
+    const code=enc(this.session);
+    const url=location.origin+location.pathname+'#'+code;
+    $('shareUrl').textContent=url;$('shareUrl').dataset.url=url;
+    $('sharePinList').innerHTML=this.pins.map((p,i)=>_pinCard(p,i,false)).join('');
+    showPage('pgShare');
+  },
+
+  copyLink(){
+    const url=$('shareUrl').dataset.url;
+    navigator.clipboard.writeText(url).then(()=>showToast('Link copied!')).catch(()=>prompt('Copy:',url));
+  },
+
+  nativeShare(){
+    const url=$('shareUrl').dataset.url;
+    if(navigator.share)navigator.share({title:'PointMe',text:'Navigate with me!',url});
+    else this.copyLink();
+  },
+
+  openNav(){if(this.session)Nav.load(this.session);},
+
+  join(){
+    let raw=$('joinInput').value.trim();
+    const h=raw.indexOf('#');if(h!==-1)raw=raw.substring(h+1);
+    const sess=dec(raw);
+    if(!sess||!Array.isArray(sess.pins)){showToast('Invalid code or link',true);return;}
+    Nav.load(sess);
+  }
+};
+
+// ─── RENDER LOOP (creator) ───
+(function loop(){
+  if($('pgCreate').classList.contains('active'))Compass.draw();
+  requestAnimationFrame(loop);
+})();
+
+// ─── INIT ───
+window.addEventListener('load',()=>{
+  GPS.start();
+  const hash=location.hash.slice(1);
+  if(hash.length>20){const s=dec(hash);if(s&&Array.isArray(s.pins)){setTimeout(()=>Nav.load(s),300);return;}}
+});
+
+window.addEventListener('resize',()=>{
+  if(Nav.map)Nav.map.invalidateSize();
+  if(CMap.map)CMap.map.invalidateSize();
+  Tilt._ui();
+});
+</script>
+</body>
+</html>
