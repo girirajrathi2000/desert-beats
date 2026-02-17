@@ -460,7 +460,7 @@ const GPS={
       this.lat=p.coords.latitude;this.lng=p.coords.longitude;this.acc=p.coords.accuracy;
       this._badge();
       Nav.onGPS();
-    },()=>this._badge(),{enableHighAccuracy:true,maximumAge:3000,timeout:15000});
+    },()=>this._badge(),{enableHighAccuracy:true,maximumAge:0,timeout:5000});
   },
   _badge(){
     [['cGpsBadge','cGpsText'],['nGpsBadge','nGpsText']].forEach(([b,t])=>{
@@ -475,34 +475,33 @@ const GPS={
 };
 
 // ─── ORIENTATION ───
-const Orient={
-  heading:null,pitch:null,
-  _cbs:[],
-  active:false,
-  start(cb){
-    if(cb)this._cbs.push(cb);
-    if(this.active)return;
-    this.active=true;
-    const h=e=>{
-      // Heading
-      let head=null;
-      if(typeof e.webkitCompassHeading==='number')head=e.webkitCompassHeading;
-      else if(e.absolute&&typeof e.alpha==='number')head=(360-e.alpha)%360;
-      else if(typeof e.alpha==='number')head=(360-e.alpha)%360;
-      if(head!==null){
-        if(this.heading===null){this.heading=head;}
-        else{let d=head-this.heading;if(d>180)d-=360;if(d<-180)d+=360;this.heading=(this.heading+d*0.15+360)%360;}
-      }
-      // Pitch — beta: ~90 upright, <90 = forward tilt, >90 = back tilt
-      if(typeof e.beta==='number'){
-        const raw=e.beta-90;
-        this.pitch=this.pitch===null?raw:this.pitch+(raw-this.pitch)*0.2;
-      }
-      this._cbs.forEach(f=>f(this.heading,this.pitch));
-    };
-    window.addEventListener('deviceorientationabsolute',h,true);
-    window.addEventListener('deviceorientation',h,true);
+const Orient = {
+  heading: null,
+  targetHeading: null,
+  active: false,
+  smoothing: 0.15, // Lower = smoother but slower
+
+  lerpAngle(a, b, t) {
+    let delta = ((b - a + 540) % 360) - 180;
+    return (a + delta * t + 360) % 360;
   },
+
+  start() {
+    if (this.active) return;
+    this.active = true;
+    const h = e => {
+      let rawHead = e.webkitCompassHeading || (360 - e.alpha);
+      if (this.heading === null) {
+        this.heading = rawHead;
+      } else {
+        // This line removes the jitter
+        this.heading = this.lerpAngle(this.heading, rawHead, this.smoothing);
+      }
+    };
+    window.addEventListener('deviceorientationabsolute', h, true);
+    window.addEventListener('deviceorientation', h, true);
+  }
+};
   requestAndStart(cb){
     if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
       DeviceOrientationEvent.requestPermission().then(s=>{
@@ -517,11 +516,13 @@ const Orient={
 
 // ─── COMPASS DRAWING ───
 function drawCompassCanvas(id, heading, targetBearing, opts){
-  const canvas=$(id);if(!canvas)return;
-  const ctx=canvas.getContext('2d');
-  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2,R=Math.min(cx,cy)-6;
-  ctx.clearRect(0,0,W,H);
-
+  const canvas = $(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  // Clear and reset the state
+  ctx.setTransform(1, 0, 0, 1, 0, 0); 
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   // Outer glow
   const gr=ctx.createRadialGradient(cx,cy,R*0.5,cx,cy,R);
   gr.addColorStop(0,'rgba(245,166,35,0)');gr.addColorStop(1,'rgba(245,166,35,0.05)');
@@ -676,6 +677,10 @@ const Tilt={
 const CMap={
   map:null,marker:null,lat:null,lng:null,
   init(){
+    if(this.map){
+    setTimeout(()=>this.map.invalidateSize(), 80);
+    return;
+    }
     if(this.map){setTimeout(()=>this.map.invalidateSize(),80);return;}
     const center=GPS.lat?[GPS.lat,GPS.lng]:[20.5937,78.9629];
     this.map=L.map('createMapEl',{zoomControl:true,attributionControl:false}).setView(center,GPS.lat?15:5);
@@ -694,7 +699,9 @@ const CMap={
     });
     setTimeout(()=>this.map.invalidateSize(),100);
   },
+  
   clear(){this.lat=null;this.lng=null;if(this.marker&&this.map){this.map.removeLayer(this.marker);this.marker=null;}$('createMapHint').textContent='👆 Tap map to place pin';}
+  new ResizeObserver(() => this.map.invalidateSize()).observe($('createMapEl'));
 };
 
 // ─── NAVIGATE ───
